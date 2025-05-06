@@ -1,0 +1,311 @@
+# test_websocket.html
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test WebSocket Chat API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+        .panel {
+            flex: 1;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        input, textarea, button {
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #messages, #events {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 3px;
+            margin-bottom: 10px;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 5px;
+        }
+        .incoming {
+            background-color: #f1f0f0;
+            text-align: left;
+        }
+        .outgoing {
+            background-color: #dcf8c6;
+            text-align: right;
+        }
+        .event {
+            margin-bottom: 5px;
+            padding: 5px;
+            background-color: #e6f7ff;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test WebSocket Chat API</h1>
+    
+    <div class="panel">
+        <h2>Connexion</h2>
+        <input type="text" id="tokenInput" placeholder="JWT Token">
+        <input type="text" id="conversationIdInput" placeholder="ID de conversation">
+        <button id="connectButton">Connecter</button>
+        <button id="disconnectButton" disabled>Déconnecter</button>
+    </div>
+    
+    <div class="container">
+        <div class="panel">
+            <h2>Messages</h2>
+            <div id="messages"></div>
+            <textarea id="messageInput" placeholder="Écrivez votre message ici"></textarea>
+            <button id="sendButton" disabled>Envoyer</button>
+            <button id="typingButton" disabled>Simuler frappe</button>
+        </div>
+        
+        <div class="panel">
+            <h2>Événements</h2>
+            <div id="events"></div>
+            <input type="text" id="messageIdInput" placeholder="ID du message à marquer comme lu">
+            <button id="markReadButton" disabled>Marquer comme lu</button>
+        </div>
+    </div>
+    
+    <script>
+        // Éléments DOM
+        const tokenInput = document.getElementById('tokenInput');
+        const conversationIdInput = document.getElementById('conversationIdInput');
+        const connectButton = document.getElementById('connectButton');
+        const disconnectButton = document.getElementById('disconnectButton');
+        const messagesContainer = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const typingButton = document.getElementById('typingButton');
+        const eventsContainer = document.getElementById('events');
+        const messageIdInput = document.getElementById('messageIdInput');
+        const markReadButton = document.getElementById('markReadButton');
+        
+        // Variables globales
+        let socket = null;
+        let isTyping = false;
+        
+        // Fonctions utilitaires
+        function addMessage(content, isOutgoing = false) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+            messageElement.classList.add(isOutgoing ? 'outgoing' : 'incoming');
+            messageElement.textContent = content;
+            messagesContainer.appendChild(messageElement);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        function addEvent(content, isError = false) {
+            const eventElement = document.createElement('div');
+            eventElement.classList.add('event');
+            if (isError) eventElement.classList.add('error');
+            eventElement.textContent = content;
+            eventsContainer.appendChild(eventElement);
+            eventsContainer.scrollTop = eventsContainer.scrollHeight;
+        }
+        
+        // Gestion des événements
+        connectButton.addEventListener('click', () => {
+            const token = tokenInput.value.trim();
+            const conversationId = conversationIdInput.value.trim();
+            
+            if (!token) {
+                addEvent('Veuillez saisir un token JWT', true);
+                return;
+            }
+            
+            if (!conversationId) {
+                addEvent('Veuillez saisir un ID de conversation', true);
+                return;
+            }
+            
+            // Fermer le socket existant si nécessaire
+            if (socket) {
+                socket.close();
+                socket = null;
+            }
+            
+            // Créer un nouveau socket
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsURL = `${wsProtocol}//${window.location.host}/ws/conversations/${conversationId}/?token=${token}`;
+            
+            try {
+                socket = new WebSocket(wsURL);
+                
+                socket.onopen = (event) => {
+                    addEvent('Connexion WebSocket établie');
+                    connectButton.disabled = true;
+                    disconnectButton.disabled = false;
+                    sendButton.disabled = false;
+                    typingButton.disabled = false;
+                    markReadButton.disabled = false;
+                };
+                
+                socket.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.type === 'message') {
+                        const message = data.message;
+                        const content = `${message.sender_username}: ${message.content}`;
+                        addMessage(content, false);
+                        messageIdInput.value = message.id;
+                    } 
+                    else if (data.type === 'read_receipt') {
+                        addEvent(`Message ${data.message_id} lu par ${data.username}`);
+                    } 
+                    else if (data.type === 'typing') {
+                        if (data.is_typing) {
+                            addEvent(`${data.username} est en train d'écrire...`);
+                        } else {
+                            addEvent(`${data.username} a arrêté d'écrire`);
+                        }
+                    }
+                    else if (data.type === 'status') {
+                        addEvent(`${data.username} est ${data.status === 'online' ? 'en ligne' : 'hors ligne'}`);
+                    }
+                    else {
+                        addEvent(`Événement inconnu: ${JSON.stringify(data)}`);
+                    }
+                };
+                
+                socket.onclose = (event) => {
+                    addEvent(`Connexion WebSocket fermée: code=${event.code}, raison=${event.reason}`);
+                    resetUIState();
+                };
+                
+                socket.onerror = (error) => {
+                    addEvent(`Erreur WebSocket: ${error.message}`, true);
+                    resetUIState();
+                };
+                
+            } catch (error) {
+                addEvent(`Erreur lors de la création du WebSocket: ${error.message}`, true);
+                resetUIState();
+            }
+        });
+        
+        disconnectButton.addEventListener('click', () => {
+            if (socket) {
+                socket.close();
+                socket = null;
+                addEvent('Déconnexion manuelle');
+                resetUIState();
+            }
+        });
+        
+        sendButton.addEventListener('click', () => {
+            if (!socket || socket.readyState !== WebSocket.OPEN) {
+                addEvent('WebSocket non connecté', true);
+                return;
+            }
+            
+            const message = messageInput.value.trim();
+            if (!message) {
+                addEvent('Veuillez saisir un message', true);
+                return;
+            }
+            
+            const data = {
+                type: 'message',
+                content: message
+            };
+            
+            socket.send(JSON.stringify(data));
+            addMessage(message, true);
+            messageInput.value = '';
+        });
+        
+        typingButton.addEventListener('click', () => {
+            if (!socket || socket.readyState !== WebSocket.OPEN) {
+                addEvent('WebSocket non connecté', true);
+                return;
+            }
+            
+            isTyping = !isTyping;
+            
+            const data = {
+                type: 'typing',
+                is_typing: isTyping
+            };
+            
+            socket.send(JSON.stringify(data));
+            typingButton.textContent = isTyping ? 'Arrêter frappe' : 'Simuler frappe';
+            addEvent(`Envoi d'état de frappe: ${isTyping ? 'début' : 'fin'}`);
+        });
+        
+        markReadButton.addEventListener('click', () => {
+            if (!socket || socket.readyState !== WebSocket.OPEN) {
+                addEvent('WebSocket non connecté', true);
+                return;
+            }
+            
+            const messageId = messageIdInput.value.trim();
+            if (!messageId) {
+                addEvent('Veuillez saisir un ID de message', true);
+                return;
+            }
+            
+            const data = {
+                type: 'read_receipt',
+                message_id: messageId
+            };
+            
+            socket.send(JSON.stringify(data));
+            addEvent(`Marquage du message ${messageId} comme lu`);
+        });
+        
+        // Pour permettre l'envoi avec la touche Entrée
+        messageInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendButton.click();
+            }
+        });
+        
+        function resetUIState() {
+            connectButton.disabled = false;
+            disconnectButton.disabled = true;
+            sendButton.disabled = true;
+            typingButton.disabled = true;
+            markReadButton.disabled = true;
+            isTyping = false;
+            typingButton.textContent = 'Simuler frappe';
+        }
+    </script>
+</body>
+</html>
