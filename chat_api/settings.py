@@ -98,7 +98,10 @@ SIMPLE_JWT = {
 }
 
 # Configuration CORS
-CORS_ALLOW_ALL_ORIGINS = True  # En développement seulement, à restreindre en production
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "https://forti-app.onrender.com",
+]
 
 # Internationalization
 LANGUAGE_CODE = 'fr-fr'
