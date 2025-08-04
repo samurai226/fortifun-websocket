@@ -13,6 +13,12 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-prod-k8m2n9p4q7w1e3r5t6y8u0i2o
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
+# Configuration de sécurité pour la production
+if not DEBUG:
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+
 ALLOWED_HOSTS = [
     'forti-app.onrender.com',
     'localhost',
