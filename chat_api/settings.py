@@ -21,6 +21,7 @@ if not DEBUG:
 
 ALLOWED_HOSTS = [
     'forti-app.onrender.com',
+    '.railway.app',
     'localhost',
     '127.0.0.1',
 ]
