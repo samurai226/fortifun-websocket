@@ -109,19 +109,13 @@ SIMPLE_JWT = {
 }
 
 # Configuration CORS
-<<<<<<< Updated upstream
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "https://forti-app.onrender.com",
-]
-=======
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only allow all origins in development
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # React dev server
     "http://127.0.0.1:3000",
     "http://localhost:8080",  # Vue dev server
     "http://127.0.0.1:8080",
-    "https://your-flutter-app.onrender.com",  # Replace with your Flutter app URL
+    "https://forti-app.onrender.com",  # Render deployment
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -145,13 +139,13 @@ CACHES = {
     }
 }
 
-# Configuration Appwrite
-APPWRITE_CONFIG = {
-    'ENDPOINT': 'https://your-appwrite-endpoint.com/v1',
-    'PROJECT_ID': 'your-project-id',
-    'API_KEY': 'your-api-key',
-    'WEBHOOK_SECRET': 'your-webhook-secret',
-}
+# Configuration Appwrite (removed)
+# APPWRITE_CONFIG = {
+#     'ENDPOINT': 'https://your-appwrite-endpoint.com/v1',
+#     'PROJECT_ID': 'your-project-id',
+#     'API_KEY': 'your-api-key',
+#     'WEBHOOK_SECRET': 'your-webhook-secret',
+# }
 
 # Configuration des logs
 LOGGING = {
@@ -184,7 +178,6 @@ LOGGING = {
         },
     },
 }
->>>>>>> Stashed changes
 
 # Internationalization
 LANGUAGE_CODE = 'fr-fr'
