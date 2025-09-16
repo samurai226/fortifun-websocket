@@ -2,15 +2,27 @@
 
 from django.urls import path
 from .views import (
-    RegisterView, UserProfileView, UserDetailView,
-    ChangePasswordView, LogoutView, update_online_status
+    UserDetailView,
+    AppwriteUserProfileView, appwrite_webhook, sync_appwrite_profile,
+    RegisterView, LoginView, UsersMeView, upload_profile_picture, upload_message_attachment
 )
 
 urlpatterns = [
-    path('register/', RegisterView.as_view(), name='register'),
-    path('profile/', UserProfileView.as_view(), name='user-profile'),
+    # Auth endpoints for Flutter (JWT)
+    path('auth/register', RegisterView.as_view(), name='auth-register'),
+    path('auth/login', LoginView.as_view(), name='auth-login'),
+    # Current user profile
+    path('users/me', UsersMeView.as_view(), name='users-me'),
+    
+    # Core Appwrite integration endpoints
+    path('appwrite/profile/', AppwriteUserProfileView.as_view(), name='appwrite-user-profile'),
+    path('appwrite/webhook/', appwrite_webhook, name='appwrite-webhook'),
+    path('appwrite/sync/', sync_appwrite_profile, name='sync-appwrite-profile'),
+    
+    # Utility endpoint (for admin/legacy purposes)
     path('users/<int:pk>/', UserDetailView.as_view(), name='user-detail'),
-    path('change-password/', ChangePasswordView.as_view(), name='change-password'),
-    path('logout/', LogoutView.as_view(), name='logout'),
-    path('update-status/', update_online_status, name='update-status'),
+
+    # Simple file upload endpoints used by Flutter
+    path('files/profile-picture', upload_profile_picture, name='upload-profile-picture'),
+    path('files/message-attachment', upload_message_attachment, name='upload-message-attachment'),
 ]

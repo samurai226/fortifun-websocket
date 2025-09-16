@@ -12,3 +12,4 @@ redis>=5.0.0
 PyJWT>=2.8.0
 whitenoise
 gunicorn==21.2.0
+requests>=2.31.0

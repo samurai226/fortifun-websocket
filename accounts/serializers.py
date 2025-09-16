@@ -2,7 +2,6 @@
 
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from django.contrib.auth.password_validation import validate_password
 from matching.models import UserPreference, UserInterest, UserInterestRelation
 
 User = get_user_model()
@@ -26,36 +25,32 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'profile_picture', 
                  'bio', 'date_of_birth', 'phone_number', 'location', 'is_online', 
-                 'last_activity', 'interests', 'preferences']
-        read_only_fields = ['id', 'is_online', 'last_activity']
+                 'last_activity', 'interests', 'preferences', 'appwrite_user_id']
+        read_only_fields = ['id', 'is_online', 'last_activity', 'appwrite_user_id']
     
     def get_interests(self, obj):
         interest_relations = UserInterestRelation.objects.filter(user=obj)
         interests = [relation.interest for relation in interest_relations]
         return UserInterestSerializer(interests, many=True).data
 
-class UserRegisterSerializer(serializers.ModelSerializer):
-    """Serializer pour l'inscription des utilisateurs"""
-    password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
-    password2 = serializers.CharField(write_only=True, required=True)
+class AppwriteUserSerializer(serializers.ModelSerializer):
+    """Serializer spécifique pour les utilisateurs Appwrite"""
+    interests = serializers.SerializerMethodField()
+    preferences = UserPreferenceSerializer(read_only=True)
     
     class Meta:
         model = User
-        fields = ['username', 'password', 'password2', 'email', 'first_name', 'last_name']
+        fields = ['id', 'appwrite_user_id', 'username', 'email', 'first_name', 'last_name', 
+                 'profile_picture', 'bio', 'date_of_birth', 'phone_number', 'location', 
+                 'latitude', 'longitude', 'is_online', 'last_activity', 'interests', 'preferences']
+        read_only_fields = ['id', 'appwrite_user_id', 'is_online', 'last_activity']
     
-    def validate(self, attrs):
-        if attrs['password'] != attrs['password2']:
-            raise serializers.ValidationError({"password": "Les mots de passe ne correspondent pas."})
-        return attrs
-    
-    def create(self, validated_data):
-        validated_data.pop('password2')
-        user = User.objects.create_user(**validated_data)
-        
-        # Création automatique des préférences par défaut
-        UserPreference.objects.create(user=user)
-        
-        return user
+    def get_interests(self, obj):
+        interest_relations = UserInterestRelation.objects.filter(user=obj)
+        interests = [relation.interest for relation in interest_relations]
+        return UserInterestSerializer(interests, many=True).data
+
+
 
 class UserUpdateSerializer(serializers.ModelSerializer):
     """Serializer pour la mise à jour du profil utilisateur"""
@@ -86,13 +81,15 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         
         return instance
 
-class ChangePasswordSerializer(serializers.Serializer):
-    """Serializer pour changer le mot de passe"""
-    old_password = serializers.CharField(required=True)
-    new_password = serializers.CharField(required=True, validators=[validate_password])
-    new_password2 = serializers.CharField(required=True)
+
+
+class AppwriteWebhookSerializer(serializers.Serializer):
+    """Serializer pour les webhooks Appwrite"""
+    event = serializers.CharField(required=True)
+    data = serializers.DictField(required=True)
     
-    def validate(self, attrs):
-        if attrs['new_password'] != attrs['new_password2']:
-            raise serializers.ValidationError({"new_password": "Les nouveaux mots de passe ne correspondent pas."})
-        return attrs
+    def validate_event(self, value):
+        valid_events = ['users.create', 'users.update', 'users.delete']
+        if value not in valid_events:
+            raise serializers.ValidationError(f"Événement non supporté. Événements valides: {valid_events}")
+        return value

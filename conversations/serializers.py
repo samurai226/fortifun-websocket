@@ -37,11 +37,27 @@ class MessageCreateSerializer(serializers.ModelSerializer):
     """Serializer pour la création de messages"""
     class Meta:
         model = Message
-        fields = ['conversation', 'content', 'attachment']
+        fields = ['content', 'attachment']
     
     def create(self, validated_data):
         request = self.context.get('request')
-        validated_data['sender'] = request.user
+        if not request:
+            raise serializers.ValidationError("Request context is required")
+        
+        # Get user from JWT authentication
+        user = request.user
+        validated_data['sender'] = user
+        
+        # Get conversation from URL parameter
+        conversation_id = self.context.get('conversation_pk')
+        if conversation_id:
+            from .models import Conversation
+            try:
+                conversation = Conversation.objects.get(id=conversation_id)
+                validated_data['conversation'] = conversation
+            except Conversation.DoesNotExist:
+                raise serializers.ValidationError("Conversation not found")
+        
         return super().create(validated_data)
 
 class ConversationSerializer(serializers.ModelSerializer):
@@ -69,19 +85,21 @@ class ConversationSerializer(serializers.ModelSerializer):
         if not request:
             return 0
         
+        # Get user from JWT authentication
+        user = request.user
+        
         # Compter les messages qui n'ont pas été lus par l'utilisateur courant
-        user_id = request.user.id
         messages = obj.messages.all()
         read_message_ids = MessageRead.objects.filter(
             message__in=messages, 
-            user=request.user
+            user=user
         ).values_list('message_id', flat=True)
         
         # Ne pas compter les messages envoyés par l'utilisateur lui-même
         unread_count = messages.exclude(
             id__in=read_message_ids
         ).exclude(
-            sender=request.user
+            sender=user
         ).count()
         
         return unread_count
@@ -110,11 +128,14 @@ class ConversationCreateSerializer(serializers.Serializer):
         message_content = validated_data['message']
         request = self.context.get('request')
         
-        # Vérifie si une conversation existe déjà entre ces utilisateurs
+        if not request:
+            raise serializers.ValidationError("Request context is required")
+        
+        # Get current user from JWT authentication
         user1 = request.user
         user2 = User.objects.get(id=participant_id)
         
-        # Recherche d'une conversation existante
+        # Vérifie si une conversation existe déjà entre ces utilisateurs
         conversations = Conversation.objects.filter(participants=user1).filter(participants=user2)
         
         if conversations.exists():

@@ -1,21 +1,16 @@
 # conversations/middleware.py
 
-import jwt
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import close_old_connections
 from channels.middleware import BaseMiddleware
 from channels.auth import AuthMiddlewareStack
 from django.contrib.auth.models import AnonymousUser
-from rest_framework_simplejwt.tokens import UntypedToken
-from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
-from urllib.parse import parse_qs
 
 User = get_user_model()
 
-class JWTAuthMiddleware(BaseMiddleware):
+class AppwriteAuthMiddleware(BaseMiddleware):
     """
-    Middleware JWT personnalisé pour les WebSockets
+    Middleware Appwrite personnalisé pour les WebSockets
     """
     def __init__(self, inner):
         self.inner = inner
@@ -24,29 +19,23 @@ class JWTAuthMiddleware(BaseMiddleware):
         # Fermez les anciennes connexions DB pour éviter les leaks
         close_old_connections()
 
-        # Récupération du token depuis les paramètres de requête
-        query_string = scope.get('query_string', b'').decode('utf-8')
-        query_params = parse_qs(query_string)
-        token = query_params.get('token', [None])[0]
+        # Récupération de l'ID Appwrite depuis les headers
+        headers = dict(scope.get('headers', []))
+        appwrite_user_id = headers.get(b'x-appwrite-user-id', b'').decode('utf-8')
 
         # Initialisation de l'utilisateur comme anonyme
         scope['user'] = AnonymousUser()
 
-        # Si aucun token n'est fourni, on laisse passer avec l'utilisateur anonyme
-        if not token:
+        # Si aucun ID Appwrite n'est fourni, on laisse passer avec l'utilisateur anonyme
+        if not appwrite_user_id:
             return await self.inner(scope, receive, send)
 
         try:
-            # Validation du token
-            UntypedToken(token)
-            # Décodage du token
-            decoded_data = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-            # Récupération de l'utilisateur
-            user_id = decoded_data.get('user_id')
-            if user_id:
-                user = await self.get_user(user_id)
+            # Récupération de l'utilisateur Django par l'ID Appwrite
+            user = await self.get_user_from_appwrite_id(appwrite_user_id)
+            if user:
                 scope['user'] = user
-        except (InvalidToken, TokenError, jwt.PyJWTError):
+        except Exception:
             # En cas d'erreur, l'utilisateur reste anonyme
             pass
 
@@ -54,19 +43,19 @@ class JWTAuthMiddleware(BaseMiddleware):
         return await self.inner(scope, receive, send)
 
     @staticmethod
-    async def get_user(user_id):
+    async def get_user_from_appwrite_id(appwrite_user_id):
         """
-        Récupère l'utilisateur de manière asynchrone
+        Récupère l'utilisateur Django par son ID Appwrite
         """
         try:
             # Ce n'est pas vraiment asynchrone, mais devrait l'être dans un environnement de production
             # En utilisant database_sync_to_async de channels
-            return User.objects.get(id=user_id)
+            return User.objects.get(appwrite_user_id=appwrite_user_id)
         except User.DoesNotExist:
             return AnonymousUser()
 
-def JWTAuthMiddlewareStack(inner):
+def AppwriteAuthMiddlewareStack(inner):
     """
-    Fonction utilitaire pour combiner le middleware JWT avec AuthMiddlewareStack
+    Fonction utilitaire pour combiner le middleware Appwrite avec AuthMiddlewareStack
     """
-    return JWTAuthMiddleware(AuthMiddlewareStack(inner))
+    return AppwriteAuthMiddleware(AuthMiddlewareStack(inner))

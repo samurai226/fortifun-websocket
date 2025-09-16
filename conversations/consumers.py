@@ -14,9 +14,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
     Consommateur pour les conversations en temps réel
     """
     async def connect(self):
-        self.user = self.scope['user']
-        if self.user.is_anonymous:
-            # Rejeter la connexion si l'utilisateur n'est pas authentifié
+        # Get user from Appwrite header in scope
+        appwrite_user_id = self.scope.get('headers', {}).get(b'x-appwrite-user-id', b'').decode('utf-8')
+        if not appwrite_user_id:
+            await self.close()
+            return
+        
+        # Get Django user from Appwrite ID
+        self.user = await self.get_user_from_appwrite_id(appwrite_user_id)
+        if not self.user:
             await self.close()
             return
         
@@ -190,6 +196,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return conversation.participants.filter(id=user_id).exists()
         except Conversation.DoesNotExist:
             return False
+    
+    @database_sync_to_async
+    def get_user_from_appwrite_id(self, appwrite_user_id):
+        """Récupère un utilisateur Django à partir de son ID Appwrite"""
+        try:
+            return User.objects.get(appwrite_user_id=appwrite_user_id)
+        except User.DoesNotExist:
+            return None
 
     @database_sync_to_async
     def save_message(self, conversation_id, user_id, content, attachment_url=None):
