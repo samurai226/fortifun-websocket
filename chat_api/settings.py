@@ -53,10 +53,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    
-    # Middleware Appwrite
-    'accounts.middleware.AppwriteAuthenticationMiddleware',
-    'accounts.middleware.AppwriteRequestLoggingMiddleware',
 ]
 
 ROOT_URLCONF = 'chat_api.urls'
@@ -92,7 +88,6 @@ AUTH_USER_MODEL = 'accounts.User'
 
 # Configuration des backends d'authentification
 AUTHENTICATION_BACKENDS = [
-    'accounts.backends.AppwriteHeaderBackend',  # Backend Appwrite (priorité)
     'django.contrib.auth.backends.ModelBackend',  # Backend Django par défaut
 ]
 
