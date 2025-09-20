@@ -41,4 +41,5 @@ else:
 python manage.py collectstatic --noinput
 
 # Start the server with gunicorn (production)
-gunicorn chat_api.wsgi:application --bind 0.0.0.0:8000 --workers 3
+# Use PORT environment variable injected by Render
+gunicorn chat_api.wsgi:application --bind 0.0.0.0:$PORT --workers 3
