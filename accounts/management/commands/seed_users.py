@@ -86,3 +86,15 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'Seed complete. Created {created} users.'))
 
 
+
+
+
+
+
+
+
+
+
+
+
+

@@ -23,15 +23,8 @@ from conversations.notifications import notify_new_match, notify_like
 User = get_user_model()
 
 def get_current_user(request):
-    """Helper function to get current user from Appwrite header"""
-    appwrite_user_id = request.headers.get('X-Appwrite-User-ID')
-    if not appwrite_user_id:
-        return None
-    
-    try:
-        return User.objects.get(appwrite_user_id=appwrite_user_id)
-    except User.DoesNotExist:
-        return None
+    """Helper function to get current user from Django authentication"""
+    return request.user if request.user.is_authenticated else None
 
 class CustomPagination(PageNumberPagination):
     """Pagination personnalisée pour les listes"""
@@ -50,7 +43,7 @@ class LikeRateThrottle(UserRateThrottle):
 class UserPreferenceView(generics.RetrieveUpdateAPIView):
     """Vue pour récupérer et mettre à jour les préférences de l'utilisateur"""
     serializer_class = UserPreferenceSerializer
-    permission_classes = (permissions.AllowAny,)  # Allow Appwrite headers
+    permission_classes = (permissions.IsAuthenticated,)
     throttle_classes = [MatchingRateThrottle]
     
     def get_object(self):
@@ -64,7 +57,7 @@ class UserPreferenceView(generics.RetrieveUpdateAPIView):
 
 class UserInterestsView(generics.ListCreateAPIView):
     """Vue pour gérer les intérêts de l'utilisateur"""
-    permission_classes = (permissions.AllowAny,)  # Allow Appwrite headers
+    permission_classes = (permissions.IsAuthenticated,)
     throttle_classes = [MatchingRateThrottle]
     
     def get_queryset(self):
@@ -131,7 +124,7 @@ class UserInterestsView(generics.ListCreateAPIView):
 class PotentialMatchesView(generics.ListAPIView):
     """Vue pour lister les utilisateurs potentiels pour le matching"""
     serializer_class = MatchUserSerializer
-    permission_classes = (permissions.AllowAny,)  # Allow Appwrite headers
+    permission_classes = (permissions.IsAuthenticated,)
     pagination_class = CustomPagination
     filter_backends = [SearchFilter, OrderingFilter]
     search_fields = ['username', 'first_name', 'last_name', 'bio', 'location']
@@ -241,7 +234,7 @@ class PotentialMatchesView(generics.ListAPIView):
 class MatchesListView(generics.ListAPIView):
     """Vue pour lister les matchs de l'utilisateur"""
     serializer_class = MatchSerializer
-    permission_classes = (permissions.AllowAny,)  # Allow Appwrite headers
+    permission_classes = (permissions.IsAuthenticated,)
     pagination_class = CustomPagination
     filter_backends = [OrderingFilter]
     ordering_fields = ['created_at', 'is_active']
@@ -262,7 +255,7 @@ class MatchesListView(generics.ListAPIView):
 class MatchViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet pour les matchs"""
     serializer_class = MatchSerializer
-    permission_classes = (permissions.AllowAny,)  # Allow Appwrite headers
+    permission_classes = (permissions.IsAuthenticated,)
     pagination_class = CustomPagination
     throttle_classes = [MatchingRateThrottle]
     
@@ -280,7 +273,7 @@ class MatchViewSet(viewsets.ReadOnlyModelViewSet):
 class LikeView(generics.CreateAPIView):
     """Vue pour liker un utilisateur"""
     serializer_class = LikeUserSerializer
-    permission_classes = (permissions.AllowAny,)  # Allow Appwrite headers
+    permission_classes = (permissions.IsAuthenticated,)
     throttle_classes = [LikeRateThrottle]
     
     def create(self, request, *args, **kwargs):
@@ -383,7 +376,7 @@ class LikeView(generics.CreateAPIView):
 class SkipUserView(generics.CreateAPIView):
     """Vue pour passer un utilisateur (équivalent à unlike mais sans notification)"""
     serializer_class = LikeUserSerializer
-    permission_classes = (permissions.AllowAny,)  # Allow Appwrite headers
+    permission_classes = (permissions.IsAuthenticated,)
     throttle_classes = [LikeRateThrottle]
     
     def create(self, request, *args, **kwargs):
@@ -427,7 +420,7 @@ class SkipUserView(generics.CreateAPIView):
 class UnlikeView(generics.CreateAPIView):
     """Vue pour annuler un like"""
     serializer_class = LikeUserSerializer
-    permission_classes = (permissions.AllowAny,)  # Allow Appwrite headers
+    permission_classes = (permissions.IsAuthenticated,)
     throttle_classes = [LikeRateThrottle]
     
     def create(self, request, *args, **kwargs):
@@ -478,7 +471,7 @@ class UnlikeView(generics.CreateAPIView):
 class BlockUserView(generics.CreateAPIView):
     """Vue pour bloquer un utilisateur"""
     serializer_class = LikeUserSerializer  # Réutilisation du même serializer
-    permission_classes = (permissions.AllowAny,)  # Allow Appwrite headers
+    permission_classes = (permissions.IsAuthenticated,)
     throttle_classes = [MatchingRateThrottle]
     
     def create(self, request, *args, **kwargs):
@@ -533,7 +526,7 @@ class BlockUserView(generics.CreateAPIView):
 class UnblockUserView(generics.CreateAPIView):
     """Vue pour débloquer un utilisateur"""
     serializer_class = LikeUserSerializer  # Réutilisation du même serializer
-    permission_classes = (permissions.AllowAny,)  # Allow Appwrite headers
+    permission_classes = (permissions.IsAuthenticated,)
     throttle_classes = [MatchingRateThrottle]
     
     def create(self, request, *args, **kwargs):

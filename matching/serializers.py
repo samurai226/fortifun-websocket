@@ -51,16 +51,9 @@ class MatchUserSerializer(serializers.ModelSerializer):
         if not request or not obj.latitude or not obj.longitude:
             return None
         
-        # Get current user from Appwrite header
-        appwrite_user_id = request.headers.get('X-Appwrite-User-ID')
-        if not appwrite_user_id:
-            return None
-        
-        try:
-            current_user = User.objects.get(appwrite_user_id=appwrite_user_id)
-            if not current_user.latitude or not current_user.longitude:
-                return None
-        except User.DoesNotExist:
+        # Get current user from Django authentication
+        current_user = request.user if request.user.is_authenticated else None
+        if not current_user or not current_user.latitude or not current_user.longitude:
             return None
         
         # Calcul de la distance en km en utilisant la formule de Haversine
@@ -100,14 +93,12 @@ class MatchSerializer(serializers.ModelSerializer):
         if not request:
             return None
         
-        # Get current user from Appwrite header
-        appwrite_user_id = request.headers.get('X-Appwrite-User-ID')
-        if not appwrite_user_id:
+        # Get current user from Django authentication
+        current_user = request.user if request.user.is_authenticated else None
+        if not current_user:
             return None
         
         try:
-            current_user = User.objects.get(appwrite_user_id=appwrite_user_id)
-            
             # Récupère l'autre utilisateur du match
             if obj.user1 == current_user:
                 matched_user = obj.user2
@@ -131,14 +122,9 @@ class LikeUserSerializer(serializers.Serializer):
         
         # Vérifie que l'utilisateur n'essaie pas de se liker lui-même
         request = self.context.get('request')
-        if request:
-            appwrite_user_id = request.headers.get('X-Appwrite-User-ID')
-            if appwrite_user_id:
-                try:
-                    current_user = User.objects.get(appwrite_user_id=appwrite_user_id)
-                    if current_user.id == value:
-                        raise serializers.ValidationError("Vous ne pouvez pas vous liker vous-même.")
-                except User.DoesNotExist:
-                    pass
+        if request and request.user.is_authenticated:
+            current_user = request.user
+            if current_user.id == value:
+                raise serializers.ValidationError("Vous ne pouvez pas vous liker vous-même.")
         
         return value

@@ -33,22 +33,7 @@ class UserSerializer(serializers.ModelSerializer):
         interests = [relation.interest for relation in interest_relations]
         return UserInterestSerializer(interests, many=True).data
 
-class AppwriteUserSerializer(serializers.ModelSerializer):
-    """Serializer spécifique pour les utilisateurs Appwrite"""
-    interests = serializers.SerializerMethodField()
-    preferences = UserPreferenceSerializer(read_only=True)
-    
-    class Meta:
-        model = User
-        fields = ['id', 'appwrite_user_id', 'username', 'email', 'first_name', 'last_name', 
-                 'profile_picture', 'bio', 'date_of_birth', 'phone_number', 'location', 
-                 'latitude', 'longitude', 'is_online', 'last_activity', 'interests', 'preferences']
-        read_only_fields = ['id', 'appwrite_user_id', 'is_online', 'last_activity']
-    
-    def get_interests(self, obj):
-        interest_relations = UserInterestRelation.objects.filter(user=obj)
-        interests = [relation.interest for relation in interest_relations]
-        return UserInterestSerializer(interests, many=True).data
+# Removed AppwriteUserSerializer - using standard UserSerializer
 
 
 
@@ -83,13 +68,4 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 
 
 
-class AppwriteWebhookSerializer(serializers.Serializer):
-    """Serializer pour les webhooks Appwrite"""
-    event = serializers.CharField(required=True)
-    data = serializers.DictField(required=True)
-    
-    def validate_event(self, value):
-        valid_events = ['users.create', 'users.update', 'users.delete']
-        if value not in valid_events:
-            raise serializers.ValidationError(f"Événement non supporté. Événements valides: {valid_events}")
-        return value
+# Removed AppwriteWebhookSerializer - using standard Django authentication
