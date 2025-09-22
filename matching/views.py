@@ -124,7 +124,9 @@ class UserInterestsView(generics.ListCreateAPIView):
 class PotentialMatchesView(generics.ListAPIView):
     """Vue pour lister les utilisateurs potentiels pour le matching"""
     serializer_class = MatchUserSerializer
-    permission_classes = (permissions.IsAuthenticated,)
+    # TEMP: fully bypass auth for testing (no auth attempted, open to all)
+    authentication_classes = ()
+    permission_classes = (permissions.AllowAny,)
     pagination_class = CustomPagination
     filter_backends = [SearchFilter, OrderingFilter]
     search_fields = ['username', 'first_name', 'last_name', 'bio', 'location']
@@ -234,7 +236,9 @@ class PotentialMatchesView(generics.ListAPIView):
 class MatchesListView(generics.ListAPIView):
     """Vue pour lister les matchs de l'utilisateur"""
     serializer_class = MatchSerializer
-    permission_classes = (permissions.IsAuthenticated,)
+    # TEMP: fully bypass auth for testing (no auth attempted, open to all)
+    authentication_classes = ()
+    permission_classes = (permissions.AllowAny,)
     pagination_class = CustomPagination
     filter_backends = [OrderingFilter]
     ordering_fields = ['created_at', 'is_active']

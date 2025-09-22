@@ -10,7 +10,8 @@ class MessageUserSerializer(serializers.ModelSerializer):
     """Serializer simplifié pour les utilisateurs dans les messages"""
     class Meta:
         model = User
-        fields = ['id', 'username', 'profile_picture']
+        # Include first_name and last_name to better match Flutter expectations
+        fields = ['id', 'username', 'first_name', 'last_name', 'profile_picture']
 
 class MessageSerializer(serializers.ModelSerializer):
     """Serializer pour les messages"""
@@ -65,12 +66,14 @@ class ConversationSerializer(serializers.ModelSerializer):
     participants = MessageUserSerializer(many=True, read_only=True)
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
+    # Provide a single counterpart participant for client convenience
+    participant = serializers.SerializerMethodField()
     
     class Meta:
         model = Conversation
         fields = ['id', 'participants', 'created_at', 'updated_at', 
-                 'is_active', 'last_message', 'unread_count']
-        read_only_fields = ['id', 'created_at', 'updated_at', 'last_message', 'unread_count']
+                 'is_active', 'last_message', 'unread_count', 'participant']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'last_message', 'unread_count', 'participant']
     
     def get_last_message(self, obj):
         """Récupère le dernier message de la conversation"""
@@ -103,6 +106,17 @@ class ConversationSerializer(serializers.ModelSerializer):
         ).count()
         
         return unread_count
+
+    def get_participant(self, obj):
+        """Return the other participant relative to the current user."""
+        request = self.context.get('request')
+        if not request:
+            # Fallback: return first participant if available
+            other = obj.participants.first()
+            return MessageUserSerializer(other, context=self.context).data if other else None
+        user = request.user
+        other = obj.participants.exclude(id=user.id).first()
+        return MessageUserSerializer(other, context=self.context).data if other else None
 
 class ConversationCreateSerializer(serializers.Serializer):
     """Serializer pour créer une nouvelle conversation"""

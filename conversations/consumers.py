@@ -14,17 +14,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
     Consommateur pour les conversations en temps réel
     """
     async def connect(self):
-        # Get user from Appwrite header in scope
-        appwrite_user_id = self.scope.get('headers', {}).get(b'x-appwrite-user-id', b'').decode('utf-8')
-        if not appwrite_user_id:
-            await self.close()
-            return
-        
-        # Get Django user from Appwrite ID
-        self.user = await self.get_user_from_appwrite_id(appwrite_user_id)
-        if not self.user:
-            await self.close()
-            return
+        # Prefer JWT-authenticated user from ASGI scope (set by JWTAuthMiddlewareStack)
+        scope_user = self.scope.get('user')
+        if scope_user is None or getattr(scope_user, 'is_anonymous', True):
+            # Fallback: legacy Appwrite header-based lookup if provided
+            headers = dict(self.scope.get('headers') or [])
+            appwrite_user_id = headers.get(b'x-appwrite-user-id')
+            if appwrite_user_id:
+                self.user = await self.get_user_from_appwrite_id(appwrite_user_id.decode('utf-8'))
+            else:
+                await self.close()
+                return
+        else:
+            self.user = scope_user
         
         self.conversation_id = self.scope['url_route']['kwargs']['conversation_id']
         self.room_group_name = f'chat_{self.conversation_id}'
