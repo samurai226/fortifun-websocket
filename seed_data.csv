@@ -1,0 +1,7 @@
+first_name,last_name,username,email,gender,bio,location,phone_number,is_online,age,latitude,longitude,photo_filename
+Alice,Johnson,alice_j,alice@example.com,Female,Passionate about photography and travel. Love exploring new places and capturing beautiful moments.,Ouagadougou,+22670123456,true,25,12.3714,-1.5197,alice.jpg
+Bob,Smith,bob_s,bob@example.com,Male,Software engineer who loves hiking and reading. Always up for a good conversation about technology.,Bobo-Dioulasso,+22670234567,false,28,11.1773,-4.2979,bob.jpg
+Claire,Williams,claire_w,claire@example.com,Female,Art lover and yoga instructor. Seeking meaningful connections and adventures.,Koudougou,+22670345678,true,23,12.2560,-2.3626,claire.jpg
+David,Brown,david_b,david@example.com,Male,Chef by profession, food enthusiast by passion. Love cooking and sharing meals with friends.,Ouahigouya,+22670456789,false,30,13.5833,-2.4167,david.jpg
+Emma,Davis,emma_d,emma@example.com,Female,Student of medicine with a passion for helping others. Love music and dancing.,Fada N'Gourma,+22670567890,true,22,12.0617,0.3578,emma.jpg
+

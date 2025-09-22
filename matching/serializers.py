@@ -32,8 +32,14 @@ class MatchUserSerializer(serializers.ModelSerializer):
     
     def get_interests(self, obj):
         """Récupère les intérêts de l'utilisateur"""
-        interests = UserInterest.objects.filter(interested_users__user=obj)
-        return [interest.name for interest in interests]
+        # Use prefetched data if available
+        if hasattr(obj, '_prefetched_objects_cache') and 'interests' in obj._prefetched_objects_cache:
+            return [relation.interest.name for relation in obj._prefetched_objects_cache['interests']]
+        
+        # Fallback to direct query
+        from matching.models import UserInterestRelation
+        interest_relations = UserInterestRelation.objects.filter(user=obj).select_related('interest')
+        return [relation.interest.name for relation in interest_relations]
     
     def get_age(self, obj):
         """Calcule l'âge de l'utilisateur à partir de sa date de naissance"""

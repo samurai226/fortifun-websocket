@@ -25,11 +25,18 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     X_FRAME_OPTIONS = 'DENY'
+else:
+    # Development settings - allow HTTP
+    SECURE_SSL_REDIRECT = False
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    APPEND_SLASH = False  # Disable automatic slash appending for development
 
 # Dynamic ALLOWED_HOSTS based on environment
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
+    '10.0.2.2',  # Android emulator can reach host machine via 10.0.2.2
     'forti-app.onrender.com',
     '.onrender.com',  # Render deployment
     '.herokuapp.com',  # Heroku deployment
