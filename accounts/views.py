@@ -116,7 +116,7 @@ def upload_profile_picture(request):
         
         # For testing without authentication, create a test user
         if not request.user.is_authenticated:
-            from .models import User  # Use the custom User model
+            # User is already defined at the top of the file using get_user_model()
             test_user, created = User.objects.get_or_create(
                 username='test_user_123',
                 defaults={'email': 'test@example.com'}
