@@ -14,6 +14,7 @@ import os
 from django.core.management import call_command
 from django.db import connection
 from django.contrib.auth import get_user_model
+import threading
 
 # Configuration du routeur pour les viewsets
 router = routers.DefaultRouter()
@@ -32,8 +33,11 @@ def seed_users(request):
         limit = int(request.GET.get('limit', '250'))
         # Only run on POST; GET just confirms route
         if request.method == 'POST':
-            call_command('create_profiles_with_images', csv_file='seed_assets/profiles/users.csv', s3_folder='profil/', limit=limit)
-            return JsonResponse({'detail': 'seed_started', 'limit': limit})
+            # Run seeding in a background thread to avoid request timeout on free plan
+            def run_seed():
+                call_command('create_profiles_with_images', csv_file='seed_assets/profiles/users.csv', s3_folder='profil/', limit=limit)
+            threading.Thread(target=run_seed, daemon=True).start()
+            return JsonResponse({'detail': 'seed_started_async', 'limit': limit}, status=202)
         return JsonResponse({'detail': 'ok', 'limit': limit})
     except Exception as e:
         return JsonResponse({'detail': 'error', 'error': str(e)}, status=500)
