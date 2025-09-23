@@ -17,3 +17,4 @@ for u in User.objects.all()[:5]:
 print("\nUsers with profile pictures:")
 for u in User.objects.filter(profile_picture__isnull=False)[:3]:
     print(f"  {u.id}: {u.username} - {u.profile_picture}")
+

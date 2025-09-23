@@ -10,8 +10,7 @@ class MessageUserSerializer(serializers.ModelSerializer):
     """Serializer simplifié pour les utilisateurs dans les messages"""
     class Meta:
         model = User
-        # Include first_name and last_name to better match Flutter expectations
-        fields = ['id', 'username', 'first_name', 'last_name', 'profile_picture']
+        fields = ['id', 'username', 'profile_picture']
 
 class MessageSerializer(serializers.ModelSerializer):
     """Serializer pour les messages"""
@@ -38,42 +37,36 @@ class MessageCreateSerializer(serializers.ModelSerializer):
     """Serializer pour la création de messages"""
     class Meta:
         model = Message
-        fields = ['content', 'attachment']
+        fields = ['conversation', 'content', 'attachment']
     
     def create(self, validated_data):
         request = self.context.get('request')
         if not request:
             raise serializers.ValidationError("Request context is required")
         
-        # Get user from JWT authentication
-        user = request.user
-        validated_data['sender'] = user
+        # Get user from Appwrite header
+        appwrite_user_id = request.headers.get('X-Appwrite-User-ID')
+        if not appwrite_user_id:
+            raise serializers.ValidationError("Appwrite user ID header is required")
         
-        # Get conversation from URL parameter
-        conversation_id = self.context.get('conversation_pk')
-        if conversation_id:
-            from .models import Conversation
-            try:
-                conversation = Conversation.objects.get(id=conversation_id)
-                validated_data['conversation'] = conversation
-            except Conversation.DoesNotExist:
-                raise serializers.ValidationError("Conversation not found")
-        
-        return super().create(validated_data)
+        try:
+            user = User.objects.get(appwrite_user_id=appwrite_user_id)
+            validated_data['sender'] = user
+            return super().create(validated_data)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Appwrite user not found")
 
 class ConversationSerializer(serializers.ModelSerializer):
     """Serializer pour les conversations"""
     participants = MessageUserSerializer(many=True, read_only=True)
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
-    # Provide a single counterpart participant for client convenience
-    participant = serializers.SerializerMethodField()
     
     class Meta:
         model = Conversation
         fields = ['id', 'participants', 'created_at', 'updated_at', 
-                 'is_active', 'last_message', 'unread_count', 'participant']
-        read_only_fields = ['id', 'created_at', 'updated_at', 'last_message', 'unread_count', 'participant']
+                 'is_active', 'last_message', 'unread_count']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'last_message', 'unread_count']
     
     def get_last_message(self, obj):
         """Récupère le dernier message de la conversation"""
@@ -88,35 +81,31 @@ class ConversationSerializer(serializers.ModelSerializer):
         if not request:
             return 0
         
-        # Get user from JWT authentication
-        user = request.user
+        # Get user from Appwrite header
+        appwrite_user_id = request.headers.get('X-Appwrite-User-ID')
+        if not appwrite_user_id:
+            return 0
         
-        # Compter les messages qui n'ont pas été lus par l'utilisateur courant
-        messages = obj.messages.all()
-        read_message_ids = MessageRead.objects.filter(
-            message__in=messages, 
-            user=user
-        ).values_list('message_id', flat=True)
-        
-        # Ne pas compter les messages envoyés par l'utilisateur lui-même
-        unread_count = messages.exclude(
-            id__in=read_message_ids
-        ).exclude(
-            sender=user
-        ).count()
-        
-        return unread_count
-
-    def get_participant(self, obj):
-        """Return the other participant relative to the current user."""
-        request = self.context.get('request')
-        if not request:
-            # Fallback: return first participant if available
-            other = obj.participants.first()
-            return MessageUserSerializer(other, context=self.context).data if other else None
-        user = request.user
-        other = obj.participants.exclude(id=user.id).first()
-        return MessageUserSerializer(other, context=self.context).data if other else None
+        try:
+            user = User.objects.get(appwrite_user_id=appwrite_user_id)
+            
+            # Compter les messages qui n'ont pas été lus par l'utilisateur courant
+            messages = obj.messages.all()
+            read_message_ids = MessageRead.objects.filter(
+                message__in=messages, 
+                user=user
+            ).values_list('message_id', flat=True)
+            
+            # Ne pas compter les messages envoyés par l'utilisateur lui-même
+            unread_count = messages.exclude(
+                id__in=read_message_ids
+            ).exclude(
+                sender=user
+            ).count()
+            
+            return unread_count
+        except User.DoesNotExist:
+            return 0
 
 class ConversationCreateSerializer(serializers.Serializer):
     """Serializer pour créer une nouvelle conversation"""
@@ -145,25 +134,31 @@ class ConversationCreateSerializer(serializers.Serializer):
         if not request:
             raise serializers.ValidationError("Request context is required")
         
-        # Get current user from JWT authentication
-        user1 = request.user
-        user2 = User.objects.get(id=participant_id)
+        # Get current user from Appwrite header
+        appwrite_user_id = request.headers.get('X-Appwrite-User-ID')
+        if not appwrite_user_id:
+            raise serializers.ValidationError("Appwrite user ID header is required")
         
-        # Vérifie si une conversation existe déjà entre ces utilisateurs
-        conversations = Conversation.objects.filter(participants=user1).filter(participants=user2)
-        
-        if conversations.exists():
-            conversation = conversations.first()
-        else:
-            # Création d'une nouvelle conversation
-            conversation = Conversation.objects.create()
-            conversation.participants.add(user1, user2)
-        
-        # Création du premier message
-        Message.objects.create(
-            conversation=conversation,
-            sender=user1,
-            content=message_content
-        )
-        
-        return conversation
+        try:
+            user1 = User.objects.get(appwrite_user_id=appwrite_user_id)
+            user2 = User.objects.get(id=participant_id)
+            
+            # Vérifie si une conversation existe déjà entre ces utilisateurs
+            conversations = Conversation.objects.filter(participants=user1).filter(participants=user2)
+            
+            if conversations.exists():
+                conversation = conversations.first()
+            else:
+                # Création d'une nouvelle conversation
+                conversation = Conversation.objects.create()
+                conversation.participants.add(user1, user2)
+            
+            # Création du premier message
+            Message.objects.create(
+                conversation=conversation,
+                sender=user1,
+                content=message_content
+            )
+            
+            return conversation        except User.DoesNotExist:
+            raise serializers.ValidationError("One of the users not found")
