@@ -12,6 +12,8 @@ from django.http import JsonResponse
 from matching.views import MatchViewSet
 import os
 from django.core.management import call_command
+from django.db import connection
+from django.contrib.auth import get_user_model
 
 # Configuration du routeur pour les viewsets
 router = routers.DefaultRouter()
@@ -36,11 +38,37 @@ def seed_users(request):
     except Exception as e:
         return JsonResponse({'detail': 'error', 'error': str(e)}, status=500)
 
+# Token-protected DB ping endpoint
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def db_ping(request):
+    provided = request.headers.get('X-Seed-Token') or request.GET.get('token')
+    expected = os.getenv('SEED_TOKEN')
+    if not expected or provided != expected:
+        return JsonResponse({'detail': 'forbidden'}, status=403)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("select version(), current_database()")
+            version, current_db = cursor.fetchone()
+        User = get_user_model()
+        user_count = User.objects.count()
+        return JsonResponse({
+            'detail': 'ok',
+            'db': current_db,
+            'version': version,
+            'user_count': user_count,
+        })
+    except Exception as e:
+        return JsonResponse({'detail': 'error', 'error': str(e)}, status=500)
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     # Temporary seeding URLs (with and without trailing slash)
     path('api/v1/admin/seed-users/', seed_users),
     path('api/v1/admin/seed-users', seed_users),
+    # DB ping URLs
+    path('api/v1/admin/db-ping/', db_ping),
+    path('api/v1/admin/db-ping', db_ping),
     
     # API URLs
     path('api/v1/', include([
