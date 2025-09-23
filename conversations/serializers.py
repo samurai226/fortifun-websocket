@@ -160,5 +160,6 @@ class ConversationCreateSerializer(serializers.Serializer):
                 content=message_content
             )
             
-            return conversation        except User.DoesNotExist:
+            return conversation
+        except User.DoesNotExist:
             raise serializers.ValidationError("One of the users not found")
