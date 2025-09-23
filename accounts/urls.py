@@ -3,7 +3,8 @@
 from django.urls import path
 from .views import (
     UserDetailView,
-    RegisterView, LoginView, UsersMeView, upload_profile_picture, upload_message_attachment
+    RegisterView, LoginView, UsersMeView, upload_profile_picture, upload_message_attachment,
+    set_test_user_photo,
 )
 
 urlpatterns = [
@@ -12,6 +13,9 @@ urlpatterns = [
     path('auth/login', LoginView.as_view(), name='auth-login'),
     # Current user profile
     path('users/me', UsersMeView.as_view(), name='users-me'),
+
+    # Temporary test helper
+    path('users/set-test-photo', set_test_user_photo, name='set-test-photo'),
     
     # Removed Appwrite integration endpoints - using standard Django authentication
     

@@ -13,6 +13,7 @@ from .serializers import (
     UserSerializer, UserUpdateSerializer
 )
 from matching.models import UserPreference
+import os
 
 User = get_user_model()
 
@@ -179,3 +180,33 @@ def upload_message_attachment(request):
 # Removed Appwrite webhook - using standard Django authentication
 
 # Removed Appwrite sync function - using standard Django authentication
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def set_test_user_photo(request):
+    token = request.headers.get('X-Seed-Token') or request.query_params.get('token')
+    if token != os.getenv('SEED_TOKEN', 'seed-3f3e7d8d-7d8b-4a0a-9f7d-2a1c6f8b1d92'):
+        return Response({'detail': 'forbidden'}, status=status.HTTP_403_FORBIDDEN)
+    try:
+        import boto3, random, os
+        bucket = os.getenv('AWS_STORAGE_BUCKET_NAME')
+        region = os.getenv('AWS_S3_REGION_NAME', 'us-west-2')
+        if not bucket:
+            return Response({'detail': 'missing_s3_config'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        s3 = boto3.client('s3', region_name=region)
+        resp = s3.list_objects_v2(Bucket=bucket, Prefix='profil/')
+        contents = resp.get('Contents', [])
+        image_keys = [obj['Key'] for obj in contents if obj['Key'].lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))]
+        if not image_keys:
+            return Response({'detail': 'no_images_found'}, status=status.HTTP_404_NOT_FOUND)
+        selected = random.choice(image_keys)
+        user, _ = User.objects.get_or_create(username='test_user_dashboard', defaults={'email': 'test_dashboard@example.com'})
+        # Assign S3 key directly to ImageField
+        user.profile_picture = selected
+        user.save(update_fields=['profile_picture'])
+        # Build public URL
+        domain = f"{bucket}.s3.{region}.amazonaws.com"
+        url = f"https://{domain}/{selected}"
+        return Response({'detail': 'ok', 'key': selected, 'url': url})
+    except Exception as e:
+        return Response({'detail': 'error', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
