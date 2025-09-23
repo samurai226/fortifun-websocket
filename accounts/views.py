@@ -116,7 +116,7 @@ def upload_profile_picture(request):
         
         # For testing without authentication, create a test user
         if not request.user.is_authenticated:
-            from django.contrib.auth.models import User
+            from .models import User  # Use the custom User model
             test_user, created = User.objects.get_or_create(
                 username='test_user_123',
                 defaults={'email': 'test@example.com'}
