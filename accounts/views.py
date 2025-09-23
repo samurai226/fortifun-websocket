@@ -109,24 +109,46 @@ class UsersMeView(generics.RetrieveUpdateAPIView):
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])  # Temporarily allow any for testing
 def upload_profile_picture(request):
-    file = request.FILES.get('file')
-    if not file:
-        return Response({'detail': 'file required'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # For testing without authentication, create a test user
-    if not request.user.is_authenticated:
-        from django.contrib.auth.models import User
-        test_user, created = User.objects.get_or_create(
-            username='test_user_123',
-            defaults={'email': 'test@example.com'}
-        )
-        user = test_user
-    else:
-        user = request.user
-    
-    user.profile_picture = file
-    user.save(update_fields=['profile_picture'])
-    return Response({'detail': 'uploaded', 'url': user.profile_picture.url})
+    try:
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'detail': 'file required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # For testing without authentication, create a test user
+        if not request.user.is_authenticated:
+            from django.contrib.auth.models import User
+            test_user, created = User.objects.get_or_create(
+                username='test_user_123',
+                defaults={'email': 'test@example.com'}
+            )
+            user = test_user
+        else:
+            user = request.user
+        
+        # Save the file to the user's profile_picture field
+        user.profile_picture = file
+        user.save(update_fields=['profile_picture'])
+        
+        # Get the URL of the uploaded file
+        if user.profile_picture:
+            return Response({
+                'detail': 'uploaded', 
+                'url': user.profile_picture.url,
+                'filename': user.profile_picture.name
+            })
+        else:
+            return Response({'detail': 'upload failed - no file saved'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+    except Exception as e:
+        import traceback
+        error_details = str(e)
+        traceback_str = traceback.format_exc()
+        print(f"Upload error: {error_details}")
+        print(f"Traceback: {traceback_str}")
+        return Response({
+            'detail': f'upload failed: {error_details}',
+            'error': 'internal_server_error'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
