@@ -9,11 +9,11 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.core.cache import cache
+import os
 from .serializers import (
     UserSerializer, UserUpdateSerializer
 )
 from matching.models import UserPreference
-import os
 
 User = get_user_model()
 
