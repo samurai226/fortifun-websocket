@@ -188,7 +188,7 @@ def set_test_user_photo(request):
     if token != os.getenv('SEED_TOKEN', 'seed-3f3e7d8d-7d8b-4a0a-9f7d-2a1c6f8b1d92'):
         return Response({'detail': 'forbidden'}, status=status.HTTP_403_FORBIDDEN)
     try:
-        import boto3, random, os
+        import boto3, random
         bucket = os.getenv('AWS_STORAGE_BUCKET_NAME')
         region = os.getenv('AWS_S3_REGION_NAME', 'us-west-2')
         if not bucket:
