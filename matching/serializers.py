@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from .models import UserPreference, UserInterest, Match
 from django.conf import settings
 import boto3
+from botocore.config import Config
 import os
 
 User = get_user_model()
@@ -29,11 +30,14 @@ def _build_presigned_url(key: str) -> str | None:
     file_name = str(key).split('/')[-1]
     s3_key = f"profil/{file_name}"
     try:
+        region = getattr(settings, 'AWS_S3_REGION_NAME', 'us-west-2') or 'us-west-2'
         s3 = boto3.client(
             's3',
-            region_name=getattr(settings, 'AWS_S3_REGION_NAME', 'us-west-2') or 'us-west-2',
+            region_name=region,
             aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
             aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+            endpoint_url=f'https://s3.{region}.amazonaws.com',
+            config=Config(s3={'addressing_style': 'path'})
         )
         return s3.generate_presigned_url(
             'get_object',
