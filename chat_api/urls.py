@@ -15,6 +15,8 @@ from django.core.management import call_command
 from django.db import connection
 from django.contrib.auth import get_user_model
 import threading
+import random
+import boto3
 
 # Configuration du routeur pour les viewsets
 router = routers.DefaultRouter()
@@ -39,6 +41,25 @@ def seed_users(request):
             threading.Thread(target=run_seed, daemon=True).start()
             return JsonResponse({'detail': 'seed_started_async', 'limit': limit}, status=202)
         return JsonResponse({'detail': 'ok', 'limit': limit})
+    except Exception as e:
+        return JsonResponse({'detail': 'error', 'error': str(e)}, status=500)
+
+# Token-protected endpoint to assign random S3 images to users without photo
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def assign_missing_photos(request):
+    provided = request.headers.get('X-Seed-Token') or request.GET.get('token')
+    expected = os.getenv('SEED_TOKEN')
+    if not expected or provided != expected:
+        return JsonResponse({'detail': 'forbidden'}, status=403)
+    try:
+        limit = request.GET.get('limit')
+        limit = int(limit) if limit and limit.isdigit() else None
+        # Run in background to avoid timeout on free plan
+        def run_assign():
+            call_command('assign_s3_images_to_users', limit=limit)
+        threading.Thread(target=run_assign, daemon=True).start()
+        return JsonResponse({'detail': 'assign_started_async', 'limit': limit}, status=202)
     except Exception as e:
         return JsonResponse({'detail': 'error', 'error': str(e)}, status=500)
 
@@ -70,6 +91,8 @@ urlpatterns = [
     # Temporary seeding URLs (with and without trailing slash)
     path('api/v1/admin/seed-users/', seed_users),
     path('api/v1/admin/seed-users', seed_users),
+    path('api/v1/admin/assign-missing-photos/', assign_missing_photos),
+    path('api/v1/admin/assign-missing-photos', assign_missing_photos),
     # DB ping URLs
     path('api/v1/admin/db-ping/', db_ping),
     path('api/v1/admin/db-ping', db_ping),
