@@ -1,3 +1,108 @@
+import random
+from typing import List
+
+from django.core.management.base import BaseCommand
+from django.contrib.auth import get_user_model
+from django.conf import settings
+
+import boto3
+
+
+class Command(BaseCommand):
+    help = (
+        "Assign random images from S3 'profil/' folder to users who do not have a profile_picture. "
+        "Generates presigned URLs at response time; this command only stores the S3 key (profil/<file>)."
+    )
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--bucket",
+            default=getattr(settings, "AWS_STORAGE_BUCKET_NAME", None),
+            help="S3 bucket name (defaults to AWS_STORAGE_BUCKET_NAME)",
+        )
+        parser.add_argument(
+            "--prefix",
+            default="profil/",
+            help="S3 key prefix to fetch images from (default: profil/)",
+        )
+        parser.add_argument(
+            "--limit",
+            type=int,
+            default=None,
+            help="Max number of users to update (default: all missing)",
+        )
+        parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Show what would change without saving",
+        )
+
+    def _list_images(self, s3, bucket: str, prefix: str) -> List[str]:
+        paginator = s3.get_paginator("list_objects_v2")
+        keys: List[str] = []
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                key = obj.get("Key")
+                if not key:
+                    continue
+                # skip directories
+                if key.endswith("/"):
+                    continue
+                keys.append(key)
+        return keys
+
+    def handle(self, *args, **options):
+        bucket = options["bucket"]
+        prefix = options["prefix"]
+        limit = options["limit"]
+        dry_run = options["dry_run"]
+
+        if not bucket:
+            self.stderr.write(self.style.ERROR("AWS bucket name is not configured"))
+            return
+
+        region = getattr(settings, "AWS_S3_REGION_NAME", "us-west-2") or "us-west-2"
+        s3 = boto3.client("s3", region_name=region)
+
+        images = self._list_images(s3, bucket, prefix)
+        if not images:
+            self.stderr.write(self.style.ERROR(f"No images found in s3://{bucket}/{prefix}"))
+            return
+
+        User = get_user_model()
+        qs = User.objects.filter(profile_picture__isnull=True) | User.objects.filter(profile_picture="")
+        users = list(qs.order_by("id"))
+
+        if limit is not None:
+            users = users[:limit]
+
+        if not users:
+            self.stdout.write(self.style.SUCCESS("No users without profile_picture to update."))
+            return
+
+        updated = 0
+        for user in users:
+            key = random.choice(images)
+            # Store the S3 key on the ImageField; do not generate URL here
+            if dry_run:
+                self.stdout.write(f"Would set {user.username} -> {key}")
+                continue
+            # If it's an ImageFieldFile, assigning the name is enough
+            try:
+                user.profile_picture.name = key
+            except Exception:
+                # fallback to direct attribute set
+                setattr(user, "profile_picture", key)
+            user.save(update_fields=["profile_picture"])
+            updated += 1
+            if updated % 25 == 0:
+                self.stdout.write(f"Updated {updated} users...")
+
+        if dry_run:
+            self.stdout.write(self.style.WARNING(f"Dry run complete. {len(users)} users would be updated."))
+        else:
+            self.stdout.write(self.style.SUCCESS(f"Done. Updated {updated} users with random images from {prefix}"))
+
 # accounts/management/commands/assign_s3_images_to_users.py
 
 import boto3
