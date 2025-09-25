@@ -3,6 +3,9 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import UserPreference, UserInterest, Match
+from django.conf import settings
+import boto3
+import os
 
 User = get_user_model()
 
@@ -17,6 +20,29 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
+
+def _build_presigned_url(key: str) -> str | None:
+    if not key:
+        return None
+    if isinstance(key, str) and key.startswith('http'):
+        return key
+    file_name = str(key).split('/')[-1]
+    s3_key = f"profil/{file_name}"
+    try:
+        s3 = boto3.client(
+            's3',
+            region_name=getattr(settings, 'AWS_S3_REGION_NAME', 'us-west-2') or 'us-west-2',
+            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+        )
+        return s3.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': settings.AWS_STORAGE_BUCKET_NAME, 'Key': s3_key},
+            ExpiresIn=3600,
+        )
+    except Exception:
+        return None
+
 
 class MatchUserSerializer(serializers.ModelSerializer):
     """Serializer simplifié pour les utilisateurs dans le contexte de matching"""
@@ -40,6 +66,13 @@ class MatchUserSerializer(serializers.ModelSerializer):
         from matching.models import UserInterestRelation
         interest_relations = UserInterestRelation.objects.filter(user=obj).select_related('interest')
         return [relation.interest.name for relation in interest_relations]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        url = _build_presigned_url(data.get('profile_picture'))
+        if url:
+            data['profile_picture'] = url
+        return data
     
     def get_age(self, obj):
         """Calcule l'âge de l'utilisateur à partir de sa date de naissance"""
