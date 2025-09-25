@@ -49,6 +49,7 @@ class MatchUserSerializer(serializers.ModelSerializer):
     interests = serializers.SerializerMethodField()
     age = serializers.SerializerMethodField()
     distance = serializers.SerializerMethodField()
+    profile_picture = serializers.SerializerMethodField()
     
     class Meta:
         model = User
@@ -67,12 +68,13 @@ class MatchUserSerializer(serializers.ModelSerializer):
         interest_relations = UserInterestRelation.objects.filter(user=obj).select_related('interest')
         return [relation.interest.name for relation in interest_relations]
 
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        url = _build_presigned_url(data.get('profile_picture'))
-        if url:
-            data['profile_picture'] = url
-        return data
+    def get_profile_picture(self, obj):
+        key = None
+        try:
+            key = getattr(obj.profile_picture, 'name', None) or getattr(obj, 'profile_picture', None)
+        except Exception:
+            key = None
+        return _build_presigned_url(key)
     
     def get_age(self, obj):
         """Calcule l'âge de l'utilisateur à partir de sa date de naissance"""

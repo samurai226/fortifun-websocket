@@ -48,6 +48,7 @@ class UserSerializer(serializers.ModelSerializer):
     """Serializer pour la représentation générale des utilisateurs"""
     interests = serializers.SerializerMethodField()
     preferences = UserPreferenceSerializer(read_only=True)
+    profile_picture = serializers.SerializerMethodField()
     
     class Meta:
         model = User
@@ -61,13 +62,15 @@ class UserSerializer(serializers.ModelSerializer):
         interests = [relation.interest for relation in interest_relations]
         return UserInterestSerializer(interests, many=True).data
 
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        # Convert profile_picture key to presigned URL if needed
-        url = _build_presigned_url(data.get('profile_picture'))
-        if url:
-            data['profile_picture'] = url
-        return data
+    def get_profile_picture(self, obj):
+        # Prefer the storage key/name to build presigned URL
+        key = None
+        try:
+            # If ImageFieldFile, .name is the key within the bucket
+            key = getattr(obj.profile_picture, 'name', None) or getattr(obj, 'profile_picture', None)
+        except Exception:
+            key = None
+        return _build_presigned_url(key)
 
 # Removed AppwriteUserSerializer - using standard UserSerializer
 
