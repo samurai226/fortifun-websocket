@@ -23,12 +23,14 @@ router = routers.DefaultRouter()
 router.register(r'conversations', ConversationViewSet, basename='conversation')
 router.register(r'matches', MatchViewSet, basename='match')
 
+DEFAULT_SEED_TOKEN = os.getenv('DEFAULT_SEED_TOKEN', 'seed-3f3e7d8d-7d8b-4a0a-9f7d-2a1c6f8b1d92')
+
 # Temporary token-protected seeding endpoint
 @api_view(['POST', 'GET'])
 @permission_classes([permissions.AllowAny])
 def seed_users(request):
     provided = request.headers.get('X-Seed-Token') or request.GET.get('token')
-    expected = os.getenv('SEED_TOKEN')
+    expected = os.getenv('SEED_TOKEN', DEFAULT_SEED_TOKEN)
     if not expected or provided != expected:
         return JsonResponse({'detail': 'forbidden'}, status=403)
     try:
@@ -49,7 +51,7 @@ def seed_users(request):
 @permission_classes([permissions.AllowAny])
 def assign_missing_photos(request):
     provided = request.headers.get('X-Seed-Token') or request.GET.get('token')
-    expected = os.getenv('SEED_TOKEN')
+    expected = os.getenv('SEED_TOKEN', DEFAULT_SEED_TOKEN)
     if not expected or provided != expected:
         return JsonResponse({'detail': 'forbidden'}, status=403)
     try:
@@ -68,7 +70,7 @@ def assign_missing_photos(request):
 @permission_classes([permissions.AllowAny])
 def db_ping(request):
     provided = request.headers.get('X-Seed-Token') or request.GET.get('token')
-    expected = os.getenv('SEED_TOKEN')
+    expected = os.getenv('SEED_TOKEN', DEFAULT_SEED_TOKEN)
     if not expected or provided != expected:
         return JsonResponse({'detail': 'forbidden'}, status=403)
     try:
