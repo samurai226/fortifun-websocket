@@ -227,6 +227,11 @@ class PotentialMatchesView(generics.ListAPIView):
         if online_only == 'true':
             queryset = queryset.filter(is_online=True)
         
+        # Filtre: uniquement les profils ayant une photo
+        with_photo = self.request.GET.get('with_photo')
+        if with_photo == 'true':
+            queryset = queryset.exclude(profile_picture__isnull=True).exclude(profile_picture='')
+        
         # Filtre par distance maximale
         max_distance = self.request.GET.get('max_distance')
         if max_distance and max_distance.isdigit():
