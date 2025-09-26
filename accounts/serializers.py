@@ -37,14 +37,15 @@ def _build_presigned_url(key: str) -> str | None:
             aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
             aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
             endpoint_url=f'https://s3.{region}.amazonaws.com',
-            config=Config(s3={'addressing_style': 'path'})
+            config=Config(signature_version='s3v4', s3={'addressing_style': 'path'})
         )
         return s3.generate_presigned_url(
             'get_object',
             Params={'Bucket': settings.AWS_STORAGE_BUCKET_NAME, 'Key': s3_key},
             ExpiresIn=3600,
         )
-    except Exception:
+    except Exception as e:
+        print(f"S3 presigned URL error: {e}")  # Debug logging
         return None
 
 
