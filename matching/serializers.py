@@ -31,21 +31,34 @@ def _build_presigned_url(key: str) -> str | None:
     s3_key = f"profil/{file_name}"
     try:
         region = getattr(settings, 'AWS_S3_REGION_NAME', 'us-west-2') or 'us-west-2'
+        
+        # Create S3 client with timeout and error handling
         s3 = boto3.client(
             's3',
             region_name=region,
             aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
             aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
             endpoint_url=f'https://s3.{region}.amazonaws.com',
-            config=Config(signature_version='s3v4', s3={'addressing_style': 'path'})
+            config=Config(
+                signature_version='s3v4', 
+                s3={'addressing_style': 'path'},
+                read_timeout=10,
+                connect_timeout=10,
+                retries={'max_attempts': 2}
+            )
         )
-        return s3.generate_presigned_url(
+        
+        # Generate presigned URL with shorter timeout
+        url = s3.generate_presigned_url(
             'get_object',
             Params={'Bucket': settings.AWS_STORAGE_BUCKET_NAME, 'Key': s3_key},
             ExpiresIn=3600,
         )
+        return url
+        
     except Exception as e:
         print(f"S3 presigned URL error: {e}")  # Debug logging
+        # Return a fallback URL or None
         return None
 
 
