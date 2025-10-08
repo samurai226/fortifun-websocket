@@ -367,7 +367,7 @@ class LikeView(generics.CreateAPIView):
         liker_data = {
             'id': user.id,
             'username': user.username,
-            'profile_picture': user.profile_picture.url if user.profile_picture else None
+            'profile_picture': user.get_profile_picture_url()
         }
         
         # Notifie l'utilisateur liké (si la fonctionnalité est activée dans les préférences)
@@ -400,7 +400,7 @@ class LikeView(generics.CreateAPIView):
                 'user': {
                     'id': user.id,
                     'username': user.username,
-                    'profile_picture': user.profile_picture.url if user.profile_picture else None
+                    'profile_picture': user.get_profile_picture_url()
                 },
                 'created_at': match.created_at.isoformat() if created else timezone.now().isoformat()
             }

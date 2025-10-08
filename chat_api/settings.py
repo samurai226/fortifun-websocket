@@ -238,7 +238,7 @@ if not os.getenv('REDIS_URL'):
 
 # CloudFront CDN Configuration
 CLOUDFRONT_DISTRIBUTION_ID = os.getenv('CLOUDFRONT_DISTRIBUTION_ID')
-CLOUDFRONT_DOMAIN = os.getenv('CLOUDFRONT_DOMAIN', 'd1234567890.cloudfront.net')
+CLOUDFRONT_DOMAIN = os.getenv('CLOUDFRONT_DOMAIN', 'd2czzsmpeluuz5.cloudfront.net')
 
 # AWS S3 Configuration for CloudFront
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')

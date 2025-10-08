@@ -3,6 +3,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils.translation import gettext_lazy as _
+from django.conf import settings
 
 class User(AbstractUser):
     """Modèle utilisateur personnalisé avec des champs supplémentaires pour le matching"""
@@ -57,3 +58,20 @@ class User(AbstractUser):
     def is_appwrite_user(self):
         """Vérifie si l'utilisateur est lié à Appwrite"""
         return bool(self.appwrite_user_id)
+    
+    def get_profile_picture_url(self):
+        """Retourne l'URL CloudFront de la photo de profil"""
+        if not self.profile_picture:
+            return None
+        
+        # Si CloudFront est configuré, utiliser CloudFront
+        if hasattr(settings, 'CLOUDFRONT_DOMAIN') and settings.CLOUDFRONT_DOMAIN:
+            # Extraire le nom du fichier du chemin S3
+            s3_url = self.profile_picture.url
+            if 'amazonaws.com' in s3_url:
+                # Extraire le nom du fichier de l'URL S3
+                filename = s3_url.split('/')[-1].split('?')[0]  # Enlever les paramètres de requête
+                return f"https://{settings.CLOUDFRONT_DOMAIN}/profil/{filename}"
+        
+        # Fallback vers l'URL S3 directe
+        return self.profile_picture.url

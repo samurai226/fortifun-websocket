@@ -148,7 +148,7 @@ def upload_profile_picture(request):
         if user.profile_picture:
             return Response({
                 'detail': 'uploaded', 
-                'url': user.profile_picture.url,
+                'url': user.get_profile_picture_url(),
                 'filename': user.profile_picture.name
             })
         else:
