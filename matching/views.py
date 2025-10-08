@@ -19,12 +19,56 @@ from .serializers import (
     MatchSerializer, LikeUserSerializer
 )
 from conversations.notifications import notify_new_match, notify_like
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 User = get_user_model()
 
 def get_current_user(request):
     """Helper function to get current user from Django authentication"""
     return getattr(request, 'user', None) if hasattr(request, 'user') and request.user.is_authenticated else None
+
+def send_match_notification(user_id, match_data):
+    """Send WebSocket notification for new match"""
+    channel_layer = get_channel_layer()
+    if channel_layer:
+        async_to_sync(channel_layer.group_send)(
+            f'user_{user_id}_notifications',
+            {
+                'type': 'match_notification',
+                'data': {
+                    'type': 'new_match',
+                    'match': match_data
+                }
+            }
+        )
+
+def create_conversation_for_match(user1, user2):
+    """Create a conversation when users match"""
+    from conversations.models import Conversation, Message
+    
+    # Check if conversation already exists
+    existing_conversation = Conversation.objects.filter(
+        participants=user1
+    ).filter(
+        participants=user2
+    ).first()
+    
+    if existing_conversation:
+        return existing_conversation
+    
+    # Create new conversation
+    conversation = Conversation.objects.create()
+    conversation.participants.add(user1, user2)
+    
+    # Create initial welcome message
+    welcome_message = Message.objects.create(
+        conversation=conversation,
+        sender=user1,  # Or could be system user
+        content="Vous avez matché! Commencez la conversation."
+    )
+    
+    return conversation
 
 class CustomPagination(PageNumberPagination):
     """Pagination personnalisée pour les listes"""
@@ -364,12 +408,21 @@ class LikeView(generics.CreateAPIView):
             # Notifie l'autre utilisateur du match
             notify_new_match(liked_user.id, match_data)
             
+            # Create conversation for the match
+            conversation = create_conversation_for_match(user, liked_user)
+            
+            # Send WebSocket notification to both users
+            send_match_notification(liked_user.id, match_data)
+            
             # Modifie les données du match pour la réponse à l'utilisateur actuel
             match_data['user'] = {
                 'id': liked_user.id,
                 'username': liked_user.username,
                 'profile_picture': liked_user.profile_picture.url if liked_user.profile_picture else None
             }
+            
+            # Send WebSocket notification to current user
+            send_match_notification(user.id, match_data)
             
             # Invalide le cache des matches
             cache.delete(f"potential_matches_{user.id}")
@@ -576,3 +629,53 @@ class UnblockUserView(generics.CreateAPIView):
         return Response({
             'detail': 'Utilisateur débloqué avec succès'
         }, status=status.HTTP_200_OK)
+
+class RecentMatchesView(generics.ListAPIView):
+    """View to get recent matches for chat integration"""
+    serializer_class = MatchSerializer
+    permission_classes = (permissions.IsAuthenticated,)
+    pagination_class = CustomPagination
+    throttle_classes = [MatchingRateThrottle]
+    
+    def get_queryset(self):
+        current_user = get_current_user(self.request)
+        if not current_user:
+            return Match.objects.none()
+        
+        user = current_user
+        return Match.objects.filter(
+            Q(user1=user) | Q(user2=user),
+            is_active=True
+        ).select_related('user1', 'user2').order_by('-created_at')
+    
+    def list(self, request, *args, **kwargs):
+        """Return recent matches with additional data for chat integration"""
+        queryset = self.get_queryset()
+        
+        # Get matches from last 30 days
+        from datetime import timedelta
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+        recent_matches = queryset.filter(created_at__gte=thirty_days_ago)
+        
+        matches_data = []
+        for match in recent_matches:
+            # Get the other user in the match
+            other_user = match.user2 if match.user1 == request.user else match.user1
+            
+            match_data = {
+                'id': other_user.id,
+                'username': other_user.username,
+                'first_name': other_user.first_name,
+                'last_name': other_user.last_name,
+                'profile_picture': other_user.profile_picture.url if other_user.profile_picture else None,
+                'bio': other_user.bio,
+                'location': other_user.location,
+                'is_online': other_user.is_online,
+                'last_activity': other_user.last_activity.isoformat() if other_user.last_activity else None,
+                'interests': [interest.interest.name for interest in other_user.interests.all()],
+                'distance': 0.0,  # Would need geolocation calculation
+                'match_created_at': match.created_at.isoformat()
+            }
+            matches_data.append(match_data)
+        
+        return Response(matches_data)

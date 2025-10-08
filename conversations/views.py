@@ -12,8 +12,33 @@ from .serializers import (
     MessageSerializer, MessageCreateSerializer
 )
 from .notifications import notify_new_message  # Ajout de l'import pour les notifications
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 User = get_user_model()
+
+def send_message_notification(conversation_id, message_data):
+    """Send WebSocket notification for new message"""
+    channel_layer = get_channel_layer()
+    if channel_layer:
+        # Send to conversation group
+        async_to_sync(channel_layer.group_send)(
+            f'chat_{conversation_id}',
+            {
+                'type': 'chat_message',
+                'message': message_data
+            }
+        )
+        
+        # Send to general chat notifications
+        async_to_sync(channel_layer.group_send)(
+            'general_chat_notifications',
+            {
+                'type': 'new_message',
+                'conversation_id': conversation_id,
+                'message': message_data
+            }
+        )
 
 class ConversationViewSet(viewsets.ModelViewSet):
     """ViewSet pour les conversations"""
@@ -145,22 +170,27 @@ class MessageViewSet(viewsets.ModelViewSet):
         conversation.updated_at = timezone.now()
         conversation.save(update_fields=['updated_at'])
         
+        # Prepare message data for notifications
+        message_data = {
+            'id': message.id,
+            'conversation_id': conversation.id,
+            'sender': {
+                'id': current_user.id,
+                'username': current_user.username,
+                'profile_picture': current_user.profile_picture.url if current_user.profile_picture else None
+            },
+            'content': message.content,
+            'created_at': message.created_at.isoformat(),
+            'is_read': False,
+            'attachment': message.attachment.url if message.attachment else None,
+        }
+        
+        # Send WebSocket notification
+        send_message_notification(conversation.id, message_data)
+        
         # Notifier les autres participants
         for participant in conversation.participants.all():
             if participant != current_user:
-                # Prépare les données du message pour la notification
-                message_data = {
-                    'id': message.id,
-                    'conversation_id': conversation.id,
-                    'sender': {
-                        'id': current_user.id,
-                        'username': current_user.username,
-                        'profile_picture': current_user.profile_picture.url if current_user.profile_picture else None
-                    },
-                    'content': message.content,
-                    'created_at': message.created_at.isoformat()
-                }
-                
                 # Envoie la notification
                 # notify_new_message(participant.id, message_data)  # Temporarily disabled
         

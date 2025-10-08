@@ -157,6 +157,12 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:8080",  # Vue dev server
     "http://127.0.0.1:8080",
     "https://forti-app.onrender.com",  # Render deployment
+    # Add mobile app origins
+    "capacitor://localhost",  # Capacitor development
+    "ionic://localhost",      # Ionic development
+    "http://localhost",       # Local development
+    "http://10.0.2.2",        # Android emulator
+    "http://10.0.3.2",        # Genymotion emulator
 ]
 
 # Add additional CORS origins from environment
@@ -200,6 +206,55 @@ else:
             'LOCATION': 'unique-snowflake',
         }
     }
+
+# Configuration des channels (WebSocket)
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [os.getenv('REDIS_URL', 'redis://localhost:6379')],
+            "capacity": 1500,
+            "expiry": 60,
+        },
+    },
+}
+
+# Fallback to in-memory layer if Redis is not available
+if not os.getenv('REDIS_URL'):
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
+
+# CloudFront CDN Configuration
+CLOUDFRONT_DISTRIBUTION_ID = os.getenv('CLOUDFRONT_DISTRIBUTION_ID')
+CLOUDFRONT_DOMAIN = os.getenv('CLOUDFRONT_DOMAIN', 'd1234567890.cloudfront.net')
+
+# AWS S3 Configuration for CloudFront
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME', 'fortu-app-assets-dev')
+AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'us-west-2')
+AWS_S3_CUSTOM_DOMAIN = CLOUDFRONT_DOMAIN
+AWS_S3_OBJECT_PARAMETERS = {
+    'CacheControl': 'max-age=86400',  # 24 hours default
+}
+AWS_DEFAULT_ACL = 'public-read'
+AWS_S3_FILE_OVERWRITE = False
+
+# Static and Media files with CloudFront
+if CLOUDFRONT_DOMAIN:
+    STATIC_URL = f'https://{CLOUDFRONT_DOMAIN}/static/'
+    MEDIA_URL = f'https://{CLOUDFRONT_DOMAIN}/media/'
+    
+    # Use S3 for file storage
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    STATICFILES_STORAGE = 'storages.backends.s3boto3.S3StaticStorage'
+else:
+    # Fallback to local storage
+    STATIC_URL = '/static/'
+    MEDIA_URL = '/media/'
 
 # Configuration Appwrite (removed)
 # APPWRITE_CONFIG = {
@@ -256,6 +311,16 @@ LOGGING = {
             'handlers': ['file', 'console'],
             'level': 'INFO',
             'propagate': True,
+        },
+        'chat_api': {
+            'handlers': ['file', 'console'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': True,
+        },
+        'health_check': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
         },
     },
     'root': {

@@ -44,17 +44,13 @@ class MessageCreateSerializer(serializers.ModelSerializer):
         if not request:
             raise serializers.ValidationError("Request context is required")
         
-        # Get user from Appwrite header
-        appwrite_user_id = request.headers.get('X-Appwrite-User-ID')
-        if not appwrite_user_id:
-            raise serializers.ValidationError("Appwrite user ID header is required")
+        # Get user from JWT authentication
+        user = request.user
+        if not user or user.is_anonymous:
+            raise serializers.ValidationError("User must be authenticated")
         
-        try:
-            user = User.objects.get(appwrite_user_id=appwrite_user_id)
-            validated_data['sender'] = user
-            return super().create(validated_data)
-        except User.DoesNotExist:
-            raise serializers.ValidationError("Appwrite user not found")
+        validated_data['sender'] = user
+        return super().create(validated_data)
 
 class ConversationSerializer(serializers.ModelSerializer):
     """Serializer pour les conversations"""
@@ -78,16 +74,11 @@ class ConversationSerializer(serializers.ModelSerializer):
     def get_unread_count(self, obj):
         """Compte les messages non lus par l'utilisateur courant"""
         request = self.context.get('request')
-        if not request:
-            return 0
-        
-        # Get user from Appwrite header
-        appwrite_user_id = request.headers.get('X-Appwrite-User-ID')
-        if not appwrite_user_id:
+        if not request or not request.user or request.user.is_anonymous:
             return 0
         
         try:
-            user = User.objects.get(appwrite_user_id=appwrite_user_id)
+            user = request.user
             
             # Compter les messages qui n'ont pas été lus par l'utilisateur courant
             messages = obj.messages.all()
@@ -104,7 +95,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             ).count()
             
             return unread_count
-        except User.DoesNotExist:
+        except Exception:
             return 0
 
 class ConversationCreateSerializer(serializers.Serializer):
@@ -131,16 +122,11 @@ class ConversationCreateSerializer(serializers.Serializer):
         message_content = validated_data['message']
         request = self.context.get('request')
         
-        if not request:
-            raise serializers.ValidationError("Request context is required")
-        
-        # Get current user from Appwrite header
-        appwrite_user_id = request.headers.get('X-Appwrite-User-ID')
-        if not appwrite_user_id:
-            raise serializers.ValidationError("Appwrite user ID header is required")
+        if not request or not request.user or request.user.is_anonymous:
+            raise serializers.ValidationError("User must be authenticated")
         
         try:
-            user1 = User.objects.get(appwrite_user_id=appwrite_user_id)
+            user1 = request.user
             user2 = User.objects.get(id=participant_id)
             
             # Vérifie si une conversation existe déjà entre ces utilisateurs
@@ -162,4 +148,4 @@ class ConversationCreateSerializer(serializers.Serializer):
             
             return conversation
         except User.DoesNotExist:
-            raise serializers.ValidationError("One of the users not found")
+            raise serializers.ValidationError("Participant user not found")

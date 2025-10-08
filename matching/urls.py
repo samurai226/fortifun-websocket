@@ -4,7 +4,8 @@ from django.urls import path
 from .views import (
     UserPreferenceView, PotentialMatchesView, MatchViewSet,
     LikeView, UnlikeView, BlockUserView, UnblockUserView,
-    MatchesListView, UserInterestsView, SkipUserView
+    MatchesListView, UserInterestsView, SkipUserView,
+    RecentMatchesView
 )
 
 urlpatterns = [
@@ -15,6 +16,7 @@ urlpatterns = [
     # Matching functionality
     path('potential-matches/', PotentialMatchesView.as_view(), name='potential-matches'),
     path('matches/', MatchesListView.as_view(), name='matches-list'),
+    path('recent-matches/', RecentMatchesView.as_view(), name='recent-matches'),
     
     # User interactions
     path('like/', LikeView.as_view(), name='like-user'),

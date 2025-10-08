@@ -249,6 +249,124 @@ class ChatConsumer(AsyncWebsocketConsumer):
         user.save(update_fields=['is_online', 'last_activity'])
 
 
+class MainChatConsumer(AsyncWebsocketConsumer):
+    """
+    Main WebSocket consumer for general chat functionality and match notifications
+    """
+    async def connect(self):
+        # Prefer JWT-authenticated user from ASGI scope
+        scope_user = self.scope.get('user')
+        if scope_user is None or getattr(scope_user, 'is_anonymous', True):
+            # Fallback: legacy Appwrite header-based lookup if provided
+            headers = dict(self.scope.get('headers') or [])
+            appwrite_user_id = headers.get(b'x-appwrite-user-id')
+            if appwrite_user_id:
+                self.user = await self.get_user_from_appwrite_id(appwrite_user_id.decode('utf-8'))
+            else:
+                await self.close()
+                return
+        else:
+            self.user = scope_user
+        
+        # User group for general notifications
+        self.user_group = f'user_{self.user.id}_notifications'
+        
+        # Join user's notification group
+        await self.channel_layer.group_add(
+            self.user_group,
+            self.channel_name
+        )
+
+        await self.accept()
+        
+        # Update user online status
+        await self.update_user_status(self.user.id, True)
+        
+        print(f"MainChatConsumer: User {self.user.username} connected")
+
+    async def disconnect(self, close_code):
+        # Leave user's notification group
+        if hasattr(self, 'user_group'):
+            await self.channel_layer.group_discard(
+                self.user_group,
+                self.channel_name
+            )
+        
+        # Update user status
+        if hasattr(self, 'user') and not self.user.is_anonymous:
+            await self.update_user_status(self.user.id, False)
+            print(f"MainChatConsumer: User {self.user.username} disconnected")
+
+    async def receive(self, text_data):
+        text_data_json = json.loads(text_data)
+        message_type = text_data_json.get('type', 'ping')
+        
+        if message_type == 'ping':
+            # Respond to ping with pong
+            await self.send(text_data=json.dumps({
+                'type': 'pong',
+                'timestamp': timezone.now().isoformat()
+            }))
+        elif message_type == 'subscribe':
+            # Handle subscription to specific message types
+            subscription_type = text_data_json.get('subscription_type')
+            if subscription_type:
+                await self.subscribe_to_type(subscription_type)
+
+    async def subscribe_to_type(self, subscription_type):
+        """Subscribe to specific message types"""
+        # This could be implemented to filter specific message types
+        pass
+
+    async def match_notification(self, event):
+        """Send match notification to client"""
+        await self.send(text_data=json.dumps({
+            'type': 'new_match',
+            'data': event['data']
+        }))
+
+    async def conversation_update(self, event):
+        """Send conversation update to client"""
+        await self.send(text_data=json.dumps({
+            'type': 'conversation_update',
+            'event': event['event'],
+            'data': event['data']
+        }))
+
+    async def new_message(self, event):
+        """Send new message notification to client"""
+        await self.send(text_data=json.dumps({
+            'type': 'new_message',
+            'conversation_id': event['conversation_id'],
+            'message': event['message']
+        }))
+
+    async def typing_indicator(self, event):
+        """Send typing indicator to client"""
+        await self.send(text_data=json.dumps({
+            'type': 'typing_indicator',
+            'conversation_id': event['conversation_id'],
+            'is_typing': event['is_typing'],
+            'user_name': event['user_name']
+        }))
+
+    @database_sync_to_async
+    def get_user_from_appwrite_id(self, appwrite_user_id):
+        """Get Django user from Appwrite ID"""
+        try:
+            return User.objects.get(appwrite_user_id=appwrite_user_id)
+        except User.DoesNotExist:
+            return None
+
+    @database_sync_to_async
+    def update_user_status(self, user_id, is_online):
+        """Update user online status"""
+        user = User.objects.get(id=user_id)
+        user.is_online = is_online
+        user.last_activity = timezone.now()
+        user.save(update_fields=['is_online', 'last_activity'])
+
+
 class NotificationConsumer(AsyncWebsocketConsumer):
     """
     Consommateur pour les notifications en temps réel

@@ -5,42 +5,78 @@ from django.db import close_old_connections
 from channels.middleware import BaseMiddleware
 from channels.auth import AuthMiddlewareStack
 from django.contrib.auth.models import AnonymousUser
+import jwt
+from django.conf import settings
 
 User = get_user_model()
 
 class AppwriteAuthMiddleware(BaseMiddleware):
     """
-    Middleware Appwrite personnalisé pour les WebSockets
+    Simplified WebSocket authentication middleware
     """
     def __init__(self, inner):
         self.inner = inner
 
     async def __call__(self, scope, receive, send):
-        # Fermez les anciennes connexions DB pour éviter les leaks
+        # Close old DB connections to avoid leaks
         close_old_connections()
 
-        # Récupération de l'ID Appwrite depuis les headers
+        # Initialize user as anonymous
+        scope['user'] = AnonymousUser()
+
+        # Try JWT authentication first (from query parameters)
+        query_string = scope.get('query_string', b'').decode('utf-8')
+        if query_string:
+            from urllib.parse import parse_qs
+            query_params = parse_qs(query_string)
+            token = query_params.get('token', [None])[0]
+            
+            if token:
+                try:
+                    # Decode JWT token
+                    payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+                    user_id = payload.get('user_id')
+                    if user_id:
+                        user = await self.get_user_from_id(user_id)
+                        if user:
+                            scope['user'] = user
+                            return await self.inner(scope, receive, send)
+                except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, Exception) as e:
+                    print(f"JWT authentication failed: {e}")
+                    pass
+
+        # Fallback: Try to get user from headers
         headers = dict(scope.get('headers', []))
         appwrite_user_id = headers.get(b'x-appwrite-user-id', b'').decode('utf-8')
 
-        # Initialisation de l'utilisateur comme anonyme
-        scope['user'] = AnonymousUser()
-
-        # Si aucun ID Appwrite n'est fourni, on laisse passer avec l'utilisateur anonyme
+        # For development/testing, allow anonymous connections
         if not appwrite_user_id:
+            print("No authentication provided, allowing anonymous connection")
             return await self.inner(scope, receive, send)
 
         try:
-            # Récupération de l'utilisateur Django par l'ID Appwrite
+            # Get Django user by Appwrite ID
             user = await self.get_user_from_appwrite_id(appwrite_user_id)
             if user:
                 scope['user'] = user
-        except Exception:
-            # En cas d'erreur, l'utilisateur reste anonyme
+                print(f"WebSocket authenticated user: {user.username}")
+        except Exception as e:
+            print(f"WebSocket authentication error: {e}")
+            # Allow anonymous connection for development
             pass
 
-        # Passez au suivant dans la pile de middleware
+        # Continue to next middleware
         return await self.inner(scope, receive, send)
+
+    @staticmethod
+    async def get_user_from_id(user_id):
+        """
+        Récupère l'utilisateur Django par son ID
+        """
+        try:
+            return User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return AnonymousUser()
 
     @staticmethod
     async def get_user_from_appwrite_id(appwrite_user_id):
