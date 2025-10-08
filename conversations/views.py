@@ -193,6 +193,7 @@ class MessageViewSet(viewsets.ModelViewSet):
             if participant != current_user:
                 # Envoie la notification
                 # notify_new_message(participant.id, message_data)  # Temporarily disabled
+                pass
         
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
