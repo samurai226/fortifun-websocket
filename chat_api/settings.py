@@ -148,7 +148,7 @@ SIMPLE_JWT = {
 }
 
 # Configuration CORS
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only allow all origins in development
+CORS_ALLOW_ALL_ORIGINS = True  # Allow all origins for mobile app compatibility
 
 # CORS allowed origins - dynamic based on environment
 CORS_ALLOWED_ORIGINS = [
@@ -163,7 +163,16 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost",       # Local development
     "http://10.0.2.2",        # Android emulator
     "http://10.0.3.2",        # Genymotion emulator
+    # Flutter mobile app origins
+    "file://",                # Flutter file:// protocol
+    "app://",                 # Flutter app:// protocol
+    "flutter://",             # Flutter flutter:// protocol
 ]
+
+# Additional CORS settings for mobile apps
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_HEADERS = True
+CORS_ALLOW_ALL_METHODS = True
 
 # Add additional CORS origins from environment
 if os.getenv('CORS_ALLOWED_ORIGINS'):
