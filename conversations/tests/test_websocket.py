@@ -407,3 +407,4 @@ class TestWebSocketIntegration(WebSocketTestCase):
         self.assertIn("matché", messages[0].content.lower())
 
 
+

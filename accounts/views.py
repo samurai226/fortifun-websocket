@@ -9,7 +9,11 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.core.cache import cache
+from .image_processing import process_and_recode_image, validate_image_format, get_image_info
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 from .serializers import (
     UserSerializer, UserUpdateSerializer
 )
@@ -129,6 +133,28 @@ def upload_profile_picture(request):
         if not file:
             return Response({'detail': 'file required'}, status=status.HTTP_400_BAD_REQUEST)
         
+        # Validate image format
+        if not validate_image_format(file):
+            return Response({
+                'detail': 'Unsupported image format. Please use JPEG, PNG, or WEBP.',
+                'error': 'invalid_format'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get image info for logging
+        image_info = get_image_info(file)
+        logger.info(f"Original image info: {image_info}")
+        
+        # Process and recode the image
+        try:
+            processed_file = process_and_recode_image(file, max_size=(1024, 1024), quality=85)
+            logger.info("Image processed and recoded successfully")
+        except ValueError as e:
+            logger.error(f"Image processing failed: {e}")
+            return Response({
+                'detail': f'Image processing failed: {str(e)}',
+                'error': 'processing_failed'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         # For testing without authentication, create a test user
         if not request.user.is_authenticated:
             # User is already defined at the top of the file using get_user_model()
@@ -140,16 +166,18 @@ def upload_profile_picture(request):
         else:
             user = request.user
         
-        # Save the file to the user's profile_picture field
-        user.profile_picture = file
+        # Save the processed file to the user's profile_picture field
+        user.profile_picture = processed_file
         user.save(update_fields=['profile_picture'])
         
         # Get the URL of the uploaded file
         if user.profile_picture:
             return Response({
-                'detail': 'uploaded', 
+                'detail': 'uploaded and processed', 
                 'url': user.get_profile_picture_url(),
-                'filename': user.profile_picture.name
+                'filename': user.profile_picture.name,
+                'processed': True,
+                'original_info': image_info
             })
         else:
             return Response({'detail': 'upload failed - no file saved'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -158,8 +186,8 @@ def upload_profile_picture(request):
         import traceback
         error_details = str(e)
         traceback_str = traceback.format_exc()
-        print(f"Upload error: {error_details}")
-        print(f"Traceback: {traceback_str}")
+        logger.error(f"Upload error: {error_details}")
+        logger.error(f"Traceback: {traceback_str}")
         return Response({
             'detail': f'upload failed: {error_details}',
             'error': 'internal_server_error'
