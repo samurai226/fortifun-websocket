@@ -92,6 +92,24 @@ def db_ping(request):
     except Exception as e:
         return JsonResponse({'detail': 'error', 'error': str(e)}, status=500)
 
+# CORS test endpoint
+@csrf_exempt
+@require_http_methods(["GET", "OPTIONS"])
+def cors_test(request):
+    """Test CORS configuration"""
+    if request.method == 'OPTIONS':
+        response = JsonResponse({})
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        return response
+    
+    return JsonResponse({
+        'status': 'cors_working',
+        'message': 'CORS configuration is working',
+        'timestamp': timezone.now().isoformat(),
+    })
+
 # Health check endpoint
 @csrf_exempt
 @require_http_methods(["GET"])
@@ -145,6 +163,9 @@ def health_check(request):
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    # CORS test endpoint
+    path('cors-test/', cors_test),
+    path('cors-test', cors_test),
     # Health check endpoint
     path('health/', health_check),
     path('health', health_check),
