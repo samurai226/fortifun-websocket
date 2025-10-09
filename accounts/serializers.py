@@ -2,22 +2,35 @@
 
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from matching.models import UserPreference, UserInterest, UserInterestRelation
 from django.conf import settings
 import boto3
 from botocore.config import Config
 import os
 
+# Optional imports for matching models (when matching app is enabled)
+try:
+    from matching.models import UserPreference, UserInterest, UserInterestRelation
+    MATCHING_AVAILABLE = True
+except ImportError:
+    MATCHING_AVAILABLE = False
+    # Create dummy classes for when matching is not available
+    class UserPreference:
+        pass
+    class UserInterest:
+        pass
+    class UserInterestRelation:
+        pass
+
 User = get_user_model()
 
 class UserInterestSerializer(serializers.ModelSerializer):
     class Meta:
-        model = UserInterest
+        model = UserInterest if MATCHING_AVAILABLE else None
         fields = ['id', 'name']
 
 class UserPreferenceSerializer(serializers.ModelSerializer):
     class Meta:
-        model = UserPreference
+        model = UserPreference if MATCHING_AVAILABLE else None
         fields = ['min_age', 'max_age', 'max_distance', 'gender_preference']
 
 def _build_presigned_url(key: str) -> str | None:
