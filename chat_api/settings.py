@@ -65,7 +65,7 @@ INSTALLED_APPS = [
     
     # Applications personnalisées (re-enabled after fixing CORS)
     'accounts',
-    'conversations.apps.ConversationsConfig',
+    # 'conversations.apps.ConversationsConfig',  # Temporarily disabled
     'matching',
 ]
 
