@@ -66,7 +66,7 @@ INSTALLED_APPS = [
     # Applications personnalisées (re-enabled after fixing CORS)
     'accounts',
     # 'conversations.apps.ConversationsConfig',
-    # 'matching',
+    'matching',
 ]
 
 MIDDLEWARE = [

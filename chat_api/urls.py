@@ -22,4 +22,6 @@ urlpatterns = [
     path('health', health_check),
     # Add accounts URLs
     path('api/v1/accounts/', include('accounts.urls')),
+    # Add matching URLs
+    path('api/v1/matching/', include('matching.urls')),
 ]
