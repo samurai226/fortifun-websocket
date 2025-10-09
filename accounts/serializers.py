@@ -23,15 +23,27 @@ except ImportError:
 
 User = get_user_model()
 
-class UserInterestSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserInterest if MATCHING_AVAILABLE else None
-        fields = ['id', 'name']
+if MATCHING_AVAILABLE:
+    class UserInterestSerializer(serializers.ModelSerializer):
+        class Meta:
+            model = UserInterest
+            fields = ['id', 'name']
 
-class UserPreferenceSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserPreference if MATCHING_AVAILABLE else None
-        fields = ['min_age', 'max_age', 'max_distance', 'gender_preference']
+    class UserPreferenceSerializer(serializers.ModelSerializer):
+        class Meta:
+            model = UserPreference
+            fields = ['min_age', 'max_age', 'max_distance', 'gender_preference']
+else:
+    # Dummy serializers when matching is not available
+    class UserInterestSerializer(serializers.Serializer):
+        id = serializers.IntegerField()
+        name = serializers.CharField()
+
+    class UserPreferenceSerializer(serializers.Serializer):
+        min_age = serializers.IntegerField()
+        max_age = serializers.IntegerField()
+        max_distance = serializers.FloatField()
+        gender_preference = serializers.CharField()
 
 def _build_presigned_url(key: str) -> str | None:
     if not key:
