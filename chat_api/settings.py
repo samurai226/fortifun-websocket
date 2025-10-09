@@ -63,10 +63,10 @@ INSTALLED_APPS = [
     'channels',
     'storages',
     
-    # Applications personnalisées
-    'accounts',
-    'conversations.apps.ConversationsConfig',
-    'matching',
+    # Applications personnalisées (temporarily disabled for debugging)
+    # 'accounts',
+    # 'conversations.apps.ConversationsConfig',
+    # 'matching',
 ]
 
 MIDDLEWARE = [
