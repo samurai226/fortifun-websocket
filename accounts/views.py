@@ -220,6 +220,89 @@ def upload_message_attachment(request):
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
+def validate_and_fix_image(request):
+    """Validate and fix an image URL if it has encoding issues"""
+    image_url = request.data.get('image_url')
+    if not image_url:
+        return Response({'detail': 'image_url required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        import requests
+        from PIL import Image
+        from io import BytesIO
+        
+        # Download the image
+        response = requests.get(image_url, timeout=10)
+        if response.status_code != 200:
+            return Response({'detail': 'Image not accessible'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Try to open and process the image
+        try:
+            with Image.open(BytesIO(response.content)) as img:
+                # Convert to RGB if necessary
+                if img.mode in ('RGBA', 'LA', 'P'):
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    if img.mode == 'P':
+                        img = img.convert('RGBA')
+                    background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                    img = background
+                elif img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
+                # Resize if too large
+                max_size = (1024, 1024)
+                if img.size[0] > max_size[0] or img.size[1] > max_size[1]:
+                    img.thumbnail(max_size, Image.Resampling.LANCZOS)
+                
+                # Save as JPEG
+                output = BytesIO()
+                img.save(output, format='JPEG', quality=95, optimize=True)
+                output.seek(0)
+                
+                # Upload the fixed image back to S3
+                import boto3
+                s3_client = boto3.client('s3', region_name=os.getenv('AWS_S3_REGION_NAME', 'us-west-2'))
+                bucket_name = os.getenv('AWS_STORAGE_BUCKET_NAME')
+                
+                # Extract filename from original URL
+                filename = image_url.split('/')[-1].split('?')[0]
+                if not filename.lower().endswith('.jpg'):
+                    filename += '.jpg'
+                
+                s3_key = f'profil/{filename}'
+                
+                s3_client.put_object(
+                    Bucket=bucket_name,
+                    Key=s3_key,
+                    Body=output.getvalue(),
+                    ContentType='image/jpeg'
+                )
+                
+                # Return the new CloudFront URL
+                cloudfront_domain = os.getenv('CLOUDFRONT_DOMAIN', 'd2czzsmpeluuz5.cloudfront.net')
+                new_url = f'https://{cloudfront_domain}/profil/{filename}'
+                
+                return Response({
+                    'detail': 'Image fixed and uploaded',
+                    'original_url': image_url,
+                    'fixed_url': new_url,
+                    's3_key': s3_key
+                })
+                
+        except Exception as img_error:
+            return Response({
+                'detail': f'Image processing failed: {str(img_error)}',
+                'error': 'processing_failed'
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    except Exception as e:
+        return Response({
+            'detail': f'Validation failed: {str(e)}',
+            'error': 'validation_failed'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def set_test_user_photo(request):
     token = request.headers.get('X-Seed-Token') or request.query_params.get('token')
     if token != os.getenv('SEED_TOKEN', 'seed-3f3e7d8d-7d8b-4a0a-9f7d-2a1c6f8b1d92'):

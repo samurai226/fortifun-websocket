@@ -93,3 +93,4 @@ def get_image_info(image_file):
     except Exception as e:
         logger.error(f"Error getting image info: {e}")
         return None
+
