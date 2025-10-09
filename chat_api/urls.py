@@ -1,6 +1,6 @@
-# Step 1: Minimal working configuration
+# Step 2: Add accounts app
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -20,4 +20,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('health/', health_check),
     path('health', health_check),
+    # Add accounts URLs
+    path('api/v1/accounts/', include('accounts.urls')),
 ]
