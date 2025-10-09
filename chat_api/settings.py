@@ -163,10 +163,10 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost",       # Local development
     "http://10.0.2.2",        # Android emulator
     "http://10.0.3.2",        # Genymotion emulator
-    # Flutter mobile app origins
-    "file://",                # Flutter file:// protocol
-    "app://",                 # Flutter app:// protocol
-    "flutter://",             # Flutter flutter:// protocol
+    # Flutter mobile app origins - FIXED: Added proper schemes
+    "file://localhost",       # Flutter file:// protocol
+    "app://localhost",        # Flutter app:// protocol
+    "flutter://localhost",    # Flutter flutter:// protocol
 ]
 
 # Additional CORS settings for mobile apps
