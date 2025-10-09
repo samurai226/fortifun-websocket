@@ -9,8 +9,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.core.cache import cache
-# Image processing temporarily disabled
-IMAGE_PROCESSING_AVAILABLE = False
+# Image processing enabled
+IMAGE_PROCESSING_AVAILABLE = True
 import os
 import logging
 
@@ -19,6 +19,7 @@ from .serializers import (
     UserSerializer, UserUpdateSerializer
 )
 from matching.models import UserPreference
+from .image_processing import process_and_recode_image, validate_image_format, get_image_info
 
 User = get_user_model()
 
