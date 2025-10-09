@@ -9,12 +9,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.core.cache import cache
-try:
-    from .image_processing import process_and_recode_image, validate_image_format, get_image_info
-    IMAGE_PROCESSING_AVAILABLE = True
-except ImportError as e:
-    print(f"Image processing not available: {e}")
-    IMAGE_PROCESSING_AVAILABLE = False
+# Image processing temporarily disabled
+IMAGE_PROCESSING_AVAILABLE = False
 import os
 import logging
 
