@@ -114,52 +114,12 @@ def cors_test(request):
 @csrf_exempt
 @require_http_methods(["GET"])
 def health_check(request):
-    """Simple health check endpoint for monitoring"""
-    try:
-        # Check database connection
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT 1")
-            db_status = "ok"
-    except Exception as e:
-        db_status = f"error: {str(e)}"
-    
-    # Check Redis connection (if available)
-    redis_status = "ok"
-    try:
-        from django.core.cache import cache
-        cache.get('health_check')
-    except Exception as e:
-        redis_status = f"error: {str(e)}"
-    
-    # Get basic system info
-    import platform
-    import psutil
-    
-    health_data = {
-        'status': 'healthy' if db_status == "ok" else 'unhealthy',
+    """Minimal health check endpoint"""
+    return JsonResponse({
+        'status': 'healthy',
         'timestamp': timezone.now().isoformat(),
-        'database': db_status,
-        'redis': redis_status,
-        'system': {
-            'platform': platform.system(),
-            'python_version': platform.python_version(),
-            'django_version': django.get_version(),
-        }
-    }
-    
-    # Add memory info if available
-    try:
-        memory = psutil.virtual_memory()
-        health_data['system']['memory'] = {
-            'total': memory.total,
-            'available': memory.available,
-            'percent': memory.percent
-        }
-    except:
-        pass
-    
-    status_code = 200 if health_data['status'] == 'healthy' else 503
-    return JsonResponse(health_data, status=status_code)
+        'message': 'Backend is running'
+    })
 
 urlpatterns = [
     path('admin/', admin.site.urls),
