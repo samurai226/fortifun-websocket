@@ -63,8 +63,8 @@ INSTALLED_APPS = [
     'channels',
     'storages',
     
-    # Applications personnalisées (temporarily disabled for debugging)
-    # 'accounts',
+    # Applications personnalisées (re-enabled after fixing CORS)
+    'accounts',
     # 'conversations.apps.ConversationsConfig',
     # 'matching',
 ]
@@ -122,8 +122,8 @@ else:
         }
     }
 
-# Modèle utilisateur personnalisé (disabled when accounts app is disabled)
-# AUTH_USER_MODEL = 'accounts.User'
+# Modèle utilisateur personnalisé (re-enabled with accounts app)
+AUTH_USER_MODEL = 'accounts.User'
 
 # Configuration des backends d'authentification
 AUTHENTICATION_BACKENDS = [
