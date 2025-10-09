@@ -4,7 +4,7 @@ from django.urls import path
 from .views import (
     UserDetailView,
     RegisterView, LoginView, UsersMeView, upload_profile_picture, upload_message_attachment,
-    set_test_user_photo, reprocess_all_images,
+    set_test_user_photo,
 )
 
 urlpatterns = [
@@ -26,6 +26,5 @@ urlpatterns = [
     path('files/profile-picture', upload_profile_picture, name='upload-profile-picture'),
     path('files/message-attachment', upload_message_attachment, name='upload-message-attachment'),
     
-    # Image reprocessing endpoint (temporary)
-    path('admin/reprocess-images', reprocess_all_images, name='reprocess-images'),
+    # Image reprocessing endpoint (temporary) - removed as function doesn't exist
 ]
