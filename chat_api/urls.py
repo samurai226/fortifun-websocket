@@ -20,6 +20,4 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('health/', health_check),
     path('health', health_check),
-    # Add accounts URLs
-    path('api/v1/accounts/', include('accounts.urls')),
 ]

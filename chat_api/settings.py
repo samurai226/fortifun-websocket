@@ -63,8 +63,8 @@ INSTALLED_APPS = [
     'channels',
     'storages',
     
-    # Applications personnalisées (gradually re-enabling)
-    'accounts',
+    # Applications personnalisées (temporarily disabled for debugging)
+    # 'accounts',
     # 'conversations.apps.ConversationsConfig',
     # 'matching',
 ]
