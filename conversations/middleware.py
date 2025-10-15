@@ -49,9 +49,9 @@ class AppwriteAuthMiddleware(BaseMiddleware):
         headers = dict(scope.get('headers', []))
         appwrite_user_id = headers.get(b'x-appwrite-user-id', b'').decode('utf-8')
 
-        # For development/testing, allow anonymous connections
-        if not appwrite_user_id:
-            print("No authentication provided, allowing anonymous connection")
+        # For development/testing, allow anonymous connections only if no JWT token
+        if not appwrite_user_id and not token:
+            print("No authentication provided, allowing anonymous connection for development")
             return await self.inner(scope, receive, send)
 
         try:

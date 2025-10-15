@@ -65,7 +65,7 @@ INSTALLED_APPS = [
     
     # Applications personnalisées (re-enabled after fixing CORS)
     'accounts',
-    # 'conversations.apps.ConversationsConfig',  # Temporarily disabled
+    'conversations.apps.ConversationsConfig',  # Re-enabled for WebSocket functionality
     'matching',
 ]
 
@@ -82,6 +82,9 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'chat_api.urls'
+
+# ASGI Application for WebSocket support
+ASGI_APPLICATION = 'chat_api.asgi.application'
 
 TEMPLATES = [
     {

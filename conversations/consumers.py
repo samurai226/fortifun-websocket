@@ -1,425 +1,399 @@
 # conversations/consumers.py
 
 import json
+import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-from django.utils import timezone
 from django.contrib.auth import get_user_model
-from .models import Conversation, Message, MessageRead
+from django.db import close_old_connections
+from .models import Conversation, Message
+from .serializers import MessageSerializer
+from django.utils import timezone
 
 User = get_user_model()
 
 class ChatConsumer(AsyncWebsocketConsumer):
-    """
-    Consommateur pour les conversations en temps réel
-    """
     async def connect(self):
-        # Prefer JWT-authenticated user from ASGI scope (set by JWTAuthMiddlewareStack)
-        scope_user = self.scope.get('user')
-        if scope_user is None or getattr(scope_user, 'is_anonymous', True):
-            # Fallback: legacy Appwrite header-based lookup if provided
-            headers = dict(self.scope.get('headers') or [])
-            appwrite_user_id = headers.get(b'x-appwrite-user-id')
-            if appwrite_user_id:
-                self.user = await self.get_user_from_appwrite_id(appwrite_user_id.decode('utf-8'))
-            else:
-                await self.close()
-                return
-        else:
-            self.user = scope_user
-        
-        self.conversation_id = self.scope['url_route']['kwargs']['conversation_id']
-        self.room_group_name = f'chat_{self.conversation_id}'
+        self.room_name = self.scope['url_route']['kwargs']['room_name']
+        self.room_group_name = f'chat_{self.room_name}'
 
-        # Vérifier si l'utilisateur est bien un participant de cette conversation
-        is_participant = await self.is_conversation_participant(self.conversation_id, self.user.id)
-        if not is_participant:
-            await self.close()
-            return
-        
-        # Rejoindre le groupe de la conversation
+        # Join room group
         await self.channel_layer.group_add(
             self.room_group_name,
             self.channel_name
         )
 
         await self.accept()
-        
-        # Mettre à jour le statut en ligne de l'utilisateur
-        await self.update_user_status(self.user.id, True)
-        
-        # Notifier les autres participants que l'utilisateur est en ligne
+
+    async def disconnect(self, close_code):
+        # Leave room group
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
+
+    # Receive message from WebSocket
+    async def receive(self, text_data):
+        text_data_json = json.loads(text_data)
+        message = text_data_json['message']
+
+        # Send message to room group
         await self.channel_layer.group_send(
             self.room_group_name,
             {
-                'type': 'user_status',
-                'user_id': self.user.id,
-                'username': self.user.username,
-                'status': 'online',
-                'timestamp': timezone.now().isoformat()
+                'type': 'chat_message',
+                'message': message
             }
         )
 
-    async def disconnect(self, close_code):
-        # Quitter le groupe de la conversation
-        if hasattr(self, 'room_group_name'):
-            # Notifier les autres participants que l'utilisateur est hors ligne
-            if hasattr(self, 'user') and not self.user.is_anonymous:
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'user_status',
-                        'user_id': self.user.id,
-                        'username': self.user.username,
-                        'status': 'offline',
-                        'timestamp': timezone.now().isoformat()
-                    }
-                )
-                
-                # Mettre à jour le statut de l'utilisateur
-                await self.update_user_status(self.user.id, False)
-            
-            await self.channel_layer.group_discard(
-                self.room_group_name,
-                self.channel_name
-            )
-
-    async def receive(self, text_data):
-        text_data_json = json.loads(text_data)
-        message_type = text_data_json.get('type', 'message')
-        
-        if message_type == 'message':
-            # Traiter un nouveau message
-            content = text_data_json.get('content')
-            attachment_url = text_data_json.get('attachment')
-            
-            if content:
-                # Sauvegarder le message dans la base de données
-                message = await self.save_message(
-                    self.conversation_id,
-                    self.user.id,
-                    content,
-                    attachment_url
-                )
-                
-                # Envoyer le message à tous les membres du groupe
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'chat_message',
-                        'message': {
-                            'id': message.id,
-                            'sender_id': self.user.id,
-                            'sender_username': self.user.username,
-                            'sender_profile_picture': self.user.profile_picture.url if self.user.profile_picture else None,
-                            'content': content,
-                            'created_at': message.created_at.isoformat(),
-                            'is_read': False,
-                            'attachment': message.attachment.url if message.attachment else None,
-                        }
-                    }
-                )
-        
-        elif message_type == 'read_receipt':
-            # Traiter un accusé de lecture
-            message_id = text_data_json.get('message_id')
-            
-            if message_id:
-                # Marquer le message comme lu
-                await self.mark_message_read(message_id, self.user.id)
-                
-                # Notifier tous les membres du groupe
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'read_receipt',
-                        'message_id': message_id,
-                        'user_id': self.user.id,
-                        'username': self.user.username,
-                        'timestamp': timezone.now().isoformat()
-                    }
-                )
-        
-        elif message_type == 'typing':
-            # Notifier que l'utilisateur est en train d'écrire
-            is_typing = text_data_json.get('is_typing', True)
-            
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {
-                    'type': 'user_typing',
-                    'user_id': self.user.id,
-                    'username': self.user.username,
-                    'is_typing': is_typing
-                }
-            )
-
+    # Receive message from room group
     async def chat_message(self, event):
-        """Envoyer un message au client WebSocket"""
+        message = event['message']
+
+        # Send message to WebSocket
         await self.send(text_data=json.dumps({
-            'type': 'message',
-            'message': event['message']
+            'message': message
         }))
-
-    async def read_receipt(self, event):
-        """Envoyer un accusé de lecture au client WebSocket"""
-        await self.send(text_data=json.dumps({
-            'type': 'read_receipt',
-            'message_id': event['message_id'],
-            'user_id': event['user_id'],
-            'username': event['username'],
-            'timestamp': event['timestamp']
-        }))
-
-    async def user_typing(self, event):
-        """Envoyer une notification de frappe au client WebSocket"""
-        await self.send(text_data=json.dumps({
-            'type': 'typing',
-            'user_id': event['user_id'],
-            'username': event['username'],
-            'is_typing': event['is_typing']
-        }))
-    
-    async def user_status(self, event):
-        """Envoyer une notification de changement de statut au client WebSocket"""
-        await self.send(text_data=json.dumps({
-            'type': 'status',
-            'user_id': event['user_id'],
-            'username': event['username'],
-            'status': event['status'],
-            'timestamp': event['timestamp']
-        }))
-
-    @database_sync_to_async
-    def is_conversation_participant(self, conversation_id, user_id):
-        """Vérifie si l'utilisateur est un participant de la conversation"""
-        try:
-            conversation = Conversation.objects.get(id=conversation_id)
-            return conversation.participants.filter(id=user_id).exists()
-        except Conversation.DoesNotExist:
-            return False
-    
-    @database_sync_to_async
-    def get_user_from_appwrite_id(self, appwrite_user_id):
-        """Récupère un utilisateur Django à partir de son ID Appwrite"""
-        try:
-            return User.objects.get(appwrite_user_id=appwrite_user_id)
-        except User.DoesNotExist:
-            return None
-
-    @database_sync_to_async
-    def save_message(self, conversation_id, user_id, content, attachment_url=None):
-        """Sauvegarde un message dans la base de données"""
-        conversation = Conversation.objects.get(id=conversation_id)
-        user = User.objects.get(id=user_id)
-        
-        message = Message.objects.create(
-            conversation=conversation,
-            sender=user,
-            content=content
-        )
-        
-        # Si une pièce jointe existe, il faudrait la traiter ici
-        # Note: le traitement complet des pièces jointes via WebSocket est complexe
-        # et nécessiterait une logique supplémentaire pour le téléchargement des fichiers
-        
-        # Mettre à jour la date de dernière modification de la conversation
-        conversation.updated_at = timezone.now()
-        conversation.save(update_fields=['updated_at'])
-        
-        return message
-
-    @database_sync_to_async
-    def mark_message_read(self, message_id, user_id):
-        """Marque un message comme lu par un utilisateur"""
-        try:
-            message = Message.objects.get(id=message_id)
-            user = User.objects.get(id=user_id)
-            MessageRead.objects.get_or_create(message=message, user=user)
-            return True
-        except (Message.DoesNotExist, User.DoesNotExist):
-            return False
-
-    @database_sync_to_async
-    def update_user_status(self, user_id, is_online):
-        """Met à jour le statut en ligne de l'utilisateur"""
-        user = User.objects.get(id=user_id)
-        user.is_online = is_online
-        user.last_activity = timezone.now()
-        user.save(update_fields=['is_online', 'last_activity'])
-
 
 class MainChatConsumer(AsyncWebsocketConsumer):
-    """
-    Main WebSocket consumer for general chat functionality and match notifications
-    """
     async def connect(self):
-        # Prefer JWT-authenticated user from ASGI scope
-        scope_user = self.scope.get('user')
-        if scope_user is None or getattr(scope_user, 'is_anonymous', True):
-            # Fallback: legacy Appwrite header-based lookup if provided
-            headers = dict(self.scope.get('headers') or [])
-            appwrite_user_id = headers.get(b'x-appwrite-user-id')
-            if appwrite_user_id:
-                self.user = await self.get_user_from_appwrite_id(appwrite_user_id.decode('utf-8'))
-            else:
-                await self.close()
-                return
-        else:
-            self.user = scope_user
-        
-        # User group for general notifications
-        self.user_group = f'user_{self.user.id}_notifications'
-        
-        # Join user's notification group
+        self.user = self.scope['user']
+        if self.user.is_anonymous:
+            await self.close()
+            return
+
+        self.room_group_name = f'user_{self.user.id}_notifications'
+
+        # Join room group
         await self.channel_layer.group_add(
-            self.user_group,
+            self.room_group_name,
             self.channel_name
         )
 
         await self.accept()
-        
-        # Update user online status
-        await self.update_user_status(self.user.id, True)
-        
-        print(f"MainChatConsumer: User {self.user.username} connected")
 
     async def disconnect(self, close_code):
-        # Leave user's notification group
-        if hasattr(self, 'user_group'):
-            await self.channel_layer.group_discard(
-                self.user_group,
-                self.channel_name
-            )
-        
-        # Update user status
-        if hasattr(self, 'user') and not self.user.is_anonymous:
-            await self.update_user_status(self.user.id, False)
-            print(f"MainChatConsumer: User {self.user.username} disconnected")
+        # Leave room group
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
 
     async def receive(self, text_data):
         text_data_json = json.loads(text_data)
-        message_type = text_data_json.get('type', 'ping')
-        
+        message_type = text_data_json.get('type')
+
         if message_type == 'ping':
-            # Respond to ping with pong
             await self.send(text_data=json.dumps({
                 'type': 'pong',
                 'timestamp': timezone.now().isoformat()
             }))
-        elif message_type == 'subscribe':
-            # Handle subscription to specific message types
-            subscription_type = text_data_json.get('subscription_type')
-            if subscription_type:
-                await self.subscribe_to_type(subscription_type)
 
-    async def subscribe_to_type(self, subscription_type):
-        """Subscribe to specific message types"""
-        # This could be implemented to filter specific message types
-        pass
-
-    async def match_notification(self, event):
-        """Send match notification to client"""
-        await self.send(text_data=json.dumps({
-            'type': 'new_match',
-            'data': event['data']
-        }))
-
-    async def conversation_update(self, event):
-        """Send conversation update to client"""
-        await self.send(text_data=json.dumps({
-            'type': 'conversation_update',
-            'event': event['event'],
-            'data': event['data']
-        }))
-
-    async def new_message(self, event):
-        """Send new message notification to client"""
-        await self.send(text_data=json.dumps({
-            'type': 'new_message',
-            'conversation_id': event['conversation_id'],
-            'message': event['message']
-        }))
-
-    async def typing_indicator(self, event):
-        """Send typing indicator to client"""
-        await self.send(text_data=json.dumps({
-            'type': 'typing_indicator',
-            'conversation_id': event['conversation_id'],
-            'is_typing': event['is_typing'],
-            'user_name': event['user_name']
-        }))
-
-    @database_sync_to_async
-    def get_user_from_appwrite_id(self, appwrite_user_id):
-        """Get Django user from Appwrite ID"""
-        try:
-            return User.objects.get(appwrite_user_id=appwrite_user_id)
-        except User.DoesNotExist:
-            return None
-
-    @database_sync_to_async
-    def update_user_status(self, user_id, is_online):
-        """Update user online status"""
-        user = User.objects.get(id=user_id)
-        user.is_online = is_online
-        user.last_activity = timezone.now()
-        user.save(update_fields=['is_online', 'last_activity'])
-
+    async def send_notification(self, event):
+        await self.send(text_data=json.dumps(event))
 
 class NotificationConsumer(AsyncWebsocketConsumer):
-    """
-    Consommateur pour les notifications en temps réel
-    """
     async def connect(self):
         self.user = self.scope['user']
         if self.user.is_anonymous:
-            # Rejeter la connexion si l'utilisateur n'est pas authentifié
             await self.close()
             return
-        
-        # Groupe personnalisé pour cet utilisateur
-        self.user_group = f'user_{self.user.id}_notifications'
-        
-        # Rejoindre le groupe de l'utilisateur
+
+        self.room_group_name = f'user_{self.user.id}_notifications'
+
+        # Join room group
         await self.channel_layer.group_add(
-            self.user_group,
+            self.room_group_name,
             self.channel_name
         )
 
         await self.accept()
-        
-        # Mettre à jour le statut en ligne de l'utilisateur
-        await self.update_user_status(self.user.id, True)
 
     async def disconnect(self, close_code):
-        # Quitter le groupe de l'utilisateur
-        if hasattr(self, 'user_group'):
-            await self.channel_layer.group_discard(
-                self.user_group,
-                self.channel_name
-            )
-        
-        # Mettre à jour le statut de l'utilisateur
-        if hasattr(self, 'user') and not self.user.is_anonymous:
-            await self.update_user_status(self.user.id, False)
+        # Leave room group
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
 
     async def receive(self, text_data):
-        # Ce consommateur ne traite pas les messages entrants
-        # Il sert uniquement à envoyer des notifications à l'utilisateur
         pass
 
-    async def notification(self, event):
-        """Envoyer une notification au client WebSocket"""
+    async def send_notification(self, event):
+        await self.send(text_data=json.dumps(event))
+
+class ConversationConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.conversation_id = self.scope['url_route']['kwargs']['conversation_id']
+        self.room_group_name = f'conversation_{self.conversation_id}'
+        self.user = self.scope['user']
+
+        if self.user.is_anonymous:
+            await self.close()
+            return
+
+        # Check if user is part of this conversation
+        if not await self.is_user_in_conversation():
+            await self.close()
+            return
+
+        # Join room group
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        # Leave room group
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
+
+    async def receive(self, text_data):
+        text_data_json = json.loads(text_data)
+        message_type = text_data_json.get('type')
+
+        if message_type == 'chat_message':
+            await self.handle_chat_message(text_data_json)
+        elif message_type == 'typing':
+            await self.handle_typing(text_data_json)
+        elif message_type == 'read_receipt':
+            await self.handle_read_receipt(text_data_json)
+
+    async def handle_chat_message(self, data):
+        message_content = data.get('message', '').strip()
+        if not message_content:
+            return
+
+        # Create message in database
+        message = await self.create_message(message_content)
+        
+        if message:
+            # Send message to room group
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'chat_message',
+                    'message': MessageSerializer(message).data
+                }
+            )
+
+    async def handle_typing(self, data):
+        is_typing = data.get('is_typing', False)
+        
+        # Send typing indicator to room group
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'typing_indicator',
+                'user_id': self.user.id,
+                'is_typing': is_typing
+            }
+        )
+
+    async def handle_read_receipt(self, data):
+        message_id = data.get('message_id')
+        
+        # Mark message as read
+        await self.mark_message_as_read(message_id)
+
+    async def chat_message(self, event):
+        # Send message to WebSocket
         await self.send(text_data=json.dumps({
-            'type': 'notification',
-            'notification': event['notification']
+            'type': 'chat_message',
+            'data': event['message']
+        }))
+
+    async def typing_indicator(self, event):
+        # Send typing indicator to WebSocket
+        await self.send(text_data=json.dumps({
+            'type': 'typing_indicator',
+            'user_id': event['user_id'],
+            'is_typing': event['is_typing']
         }))
 
     @database_sync_to_async
-    def update_user_status(self, user_id, is_online):
-        """Met à jour le statut en ligne de l'utilisateur"""
-        user = User.objects.get(id=user_id)
-        user.is_online = is_online
-        user.last_activity = timezone.now()
-        user.save(update_fields=['is_online', 'last_activity'])
+    def is_user_in_conversation(self):
+        try:
+            conversation = Conversation.objects.get(id=self.conversation_id)
+            return self.user in conversation.participants.all()
+        except Conversation.DoesNotExist:
+            return False
+
+    @database_sync_to_async
+    def create_message(self, content):
+        try:
+            conversation = Conversation.objects.get(id=self.conversation_id)
+            message = Message.objects.create(
+                conversation=conversation,
+                sender=self.user,
+                content=content
+            )
+            return message
+        except Conversation.DoesNotExist:
+            return None
+
+    @database_sync_to_async
+    def mark_message_as_read(self, message_id):
+        try:
+            message = Message.objects.get(id=message_id)
+            if message.sender != self.user:
+                message.is_read = True
+                message.save()
+        except Message.DoesNotExist:
+            pass
+
+# NEW: Anonymous Chat Consumer for immediate chat after matching
+class AnonymousChatConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.room_id = self.scope['url_route']['kwargs']['room_id']
+        self.room_group_name = f'anonymous_chat_{self.room_id}'
+        
+        # No authentication required for anonymous chat
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+        
+        await self.accept()
+        
+        # Send welcome message
+        await self.send(text_data=json.dumps({
+            'type': 'welcome',
+            'message': 'Connected to anonymous chat room',
+            'room_id': self.room_id,
+            'timestamp': timezone.now().isoformat()
+        }))
+
+    async def disconnect(self, close_code):
+        # Leave room group
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
+
+    async def receive(self, text_data):
+        try:
+            data = json.loads(text_data)
+            message_type = data.get('type')
+            
+            if message_type == 'chat_message':
+                await self.handle_chat_message(data)
+            elif message_type == 'typing':
+                await self.handle_typing(data)
+            elif message_type == 'user_join':
+                await self.handle_user_join(data)
+            elif message_type == 'user_leave':
+                await self.handle_user_leave(data)
+                
+        except json.JSONDecodeError:
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': 'Invalid JSON format'
+            }))
+
+    async def handle_chat_message(self, data):
+        message_content = data.get('message', '').strip()
+        sender_name = data.get('sender_name', 'Anonymous')
+        sender_id = data.get('sender_id', 'anonymous')
+        
+        if not message_content:
+            return
+
+        # Broadcast message to room group
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'chat_message',
+                'message': message_content,
+                'sender_name': sender_name,
+                'sender_id': sender_id,
+                'timestamp': timezone.now().isoformat()
+            }
+        )
+
+    async def handle_typing(self, data):
+        is_typing = data.get('is_typing', False)
+        sender_name = data.get('sender_name', 'Anonymous')
+        sender_id = data.get('sender_id', 'anonymous')
+        
+        # Broadcast typing indicator to room group
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'typing_indicator',
+                'sender_name': sender_name,
+                'sender_id': sender_id,
+                'is_typing': is_typing
+            }
+        )
+
+    async def handle_user_join(self, data):
+        sender_name = data.get('sender_name', 'Anonymous')
+        sender_id = data.get('sender_id', 'anonymous')
+        
+        # Broadcast user join to room group
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'user_join',
+                'sender_name': sender_name,
+                'sender_id': sender_id,
+                'timestamp': timezone.now().isoformat()
+            }
+        )
+
+    async def handle_user_leave(self, data):
+        sender_name = data.get('sender_name', 'Anonymous')
+        sender_id = data.get('sender_id', 'anonymous')
+        
+        # Broadcast user leave to room group
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'user_leave',
+                'sender_name': sender_name,
+                'sender_id': sender_id,
+                'timestamp': timezone.now().isoformat()
+            }
+        )
+
+    async def chat_message(self, event):
+        # Send message to WebSocket
+        await self.send(text_data=json.dumps({
+            'type': 'chat_message',
+            'message': event['message'],
+            'sender_name': event['sender_name'],
+            'sender_id': event['sender_id'],
+            'timestamp': event['timestamp']
+        }))
+
+    async def typing_indicator(self, event):
+        # Send typing indicator to WebSocket
+        await self.send(text_data=json.dumps({
+            'type': 'typing_indicator',
+            'sender_name': event['sender_name'],
+            'sender_id': event['sender_id'],
+            'is_typing': event['is_typing']
+        }))
+
+    async def user_join(self, event):
+        # Send user join notification to WebSocket
+        await self.send(text_data=json.dumps({
+            'type': 'user_join',
+            'sender_name': event['sender_name'],
+            'sender_id': event['sender_id'],
+            'timestamp': event['timestamp']
+        }))
+
+    async def user_leave(self, event):
+        # Send user leave notification to WebSocket
+        await self.send(text_data=json.dumps({
+            'type': 'user_leave',
+            'sender_name': event['sender_name'],
+            'sender_id': event['sender_id'],
+            'timestamp': event['timestamp']
+        }))
