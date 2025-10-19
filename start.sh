@@ -13,6 +13,6 @@ echo "Skipping user seeding - accounts app is disabled"
 # Collect static files
 python manage.py collectstatic --noinput
 
-# Start the server with gunicorn (production)
+# Start the server with daphne (ASGI) for WebSocket support
 # Use PORT environment variable injected by Render
-gunicorn chat_api.wsgi:application --bind 0.0.0.0:$PORT --workers 3
+daphne -b 0.0.0.0 -p $PORT chat_api.asgi:application

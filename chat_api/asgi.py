@@ -11,13 +11,13 @@ from django.core.asgi import get_asgi_application
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.security.websocket import AllowedHostsOriginValidator
 import conversations.routing
-from conversations.middleware import AppwriteAuthMiddlewareStack
+from conversations.middleware import JWTAuthMiddlewareStack
 
 # Application ASGI avec middleware JWT pour l'authentification WebSocket
 application = ProtocolTypeRouter({
     'http': get_asgi_application(),
     'websocket': AllowedHostsOriginValidator(
-        AppwriteAuthMiddlewareStack(
+        JWTAuthMiddlewareStack(
             URLRouter(
                 conversations.routing.websocket_urlpatterns
             )
