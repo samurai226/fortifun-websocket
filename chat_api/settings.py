@@ -21,7 +21,8 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_SECONDS = 31536000
     SECURE_REDIRECT_EXEMPT = []
-    SECURE_SSL_REDIRECT = True
+    # DISABLED: SECURE_SSL_REDIRECT to prevent redirect loops in mobile apps
+    # SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     X_FRAME_OPTIONS = 'DENY'
@@ -170,6 +171,11 @@ CORS_ALLOWED_ORIGINS = [
     "file://localhost",       # Flutter file:// protocol
     "app://localhost",        # Flutter app:// protocol
     "flutter://localhost",    # Flutter flutter:// protocol
+    # Additional Flutter origins
+    "http://localhost:3000",  # Flutter web development
+    "https://localhost:3000", # Flutter web HTTPS
+    "http://127.0.0.1:3000",  # Flutter web localhost
+    "https://127.0.0.1:3000", # Flutter web localhost HTTPS
 ]
 
 # Additional CORS settings for mobile apps
@@ -198,6 +204,15 @@ CORS_ALLOW_HEADERS = [
 
 # CORS preflight max age
 CORS_PREFLIGHT_MAX_AGE = 86400  # 24 hours
+
+# Additional settings to prevent redirect loops in mobile apps
+USE_TZ = True
+TIME_ZONE = 'UTC'
+
+# Disable automatic trailing slash redirects that can cause issues
+APPEND_SLASH = False
+
+# Note: MIDDLEWARE is already defined above
 
 # Configuration du cache
 # Use Redis in production, local memory in development
