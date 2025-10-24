@@ -14,11 +14,25 @@ services:
       - key: CORS_ALLOWED_ORIGINS
         value: "https://*.onrender.com"
       - key: DJANGO_SETTINGS_MODULE
-        value: "chat_api.settings_http_only"
+        value: "chat_api.settings_aurora"
+      - key: DB_NAME
+        value: "fortifun_aurora"
+      - key: DB_USER
+        value: "fortifun_admin"
+      - key: DB_PASSWORD
+        value: "[YOUR_AURORA_PASSWORD]"
+      - key: DB_HOST
+        value: "[YOUR_AURORA_ENDPOINT]"
+      - key: DB_PORT
+        value: "5432"
+      - key: AWS_ACCESS_KEY_ID
+        value: "[YOUR_AWS_ACCESS_KEY]"
+      - key: AWS_SECRET_ACCESS_KEY
+        value: "[YOUR_AWS_SECRET_KEY]"
+      - key: AWS_STORAGE_BUCKET_NAME
+        value: "fortifun-media"
+      - key: AWS_S3_REGION_NAME
+        value: "us-west-2"
     healthCheckPath: /api/v1/accounts/auth/login
 
-databases:
-  - name: fortifun-db
-    plan: free
-    databaseName: fortifun
-    user: fortifun_user
+# No local database - using AWS RDS Aurora
