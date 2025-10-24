@@ -38,6 +38,7 @@ ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
     '10.0.2.2',  # Android emulator can reach host machine via 10.0.2.2
+    'testserver',  # For Django test client
     'forti-app.onrender.com',
     '.onrender.com',  # Render deployment
     '.herokuapp.com',  # Heroku deployment
@@ -258,6 +259,10 @@ if not os.getenv('REDIS_URL'):
 CLOUDFRONT_DISTRIBUTION_ID = os.getenv('CLOUDFRONT_DISTRIBUTION_ID')
 CLOUDFRONT_DOMAIN = os.getenv('CLOUDFRONT_DOMAIN', 'd2czzsmpeluuz5.cloudfront.net')
 
+# Firebase Cloud Messaging Configuration
+FCM_SERVER_KEY = os.environ.get('FCM_SERVER_KEY', '')
+FCM_PROJECT_ID = os.environ.get('FCM_PROJECT_ID', '')
+
 # AWS S3 Configuration for CloudFront
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
@@ -267,7 +272,7 @@ AWS_S3_CUSTOM_DOMAIN = CLOUDFRONT_DOMAIN
 AWS_S3_OBJECT_PARAMETERS = {
     'CacheControl': 'max-age=86400',  # 24 hours default
 }
-AWS_DEFAULT_ACL = 'public-read'
+AWS_DEFAULT_ACL = None
 AWS_S3_FILE_OVERWRITE = False
 
 # Static and Media files with CloudFront

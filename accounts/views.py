@@ -4,6 +4,7 @@ from rest_framework import status, generics, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView
 from django.contrib.auth import authenticate
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import get_user_model
@@ -300,6 +301,26 @@ def validate_and_fix_image(request):
             'detail': f'Validation failed: {str(e)}',
             'error': 'validation_failed'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class CustomTokenRefreshView(TokenRefreshView):
+    """Custom token refresh view that includes user data"""
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == 200:
+            # Add user data to refresh response
+            try:
+                user = request.user
+                if user and user.is_authenticated:
+                    response.data['user'] = UserSerializer(user).data
+            except Exception as e:
+                logger.error(f"Error adding user data to refresh response: {e}")
+        return response
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def logout_view(request):
+    """Logout endpoint - in JWT, logout is handled client-side"""
+    return Response({'detail': 'Logout successful'})
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])

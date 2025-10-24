@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .message { background-color: #d1ecf1; color: #0c5460; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .success { background-color: #d4edda; color: #155724; }
+        
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        
+        input, select {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 WebSocket Test Client</h1>
+        <p>Test the WebSocket system for FortiFun app</p>
+        
+        <!-- Connection Status -->
+        <div id="status" class="status disconnected">Disconnected</div>
+        
+        <!-- Authentication Section -->
+        <div class="section">
+            <h3>🔐 Authentication</h3>
+            <input type="text" id="email" placeholder="Email" value="websocket_test2@example.com">
+            <input type="password" id="password" placeholder="Password" value="WebSocketTest123!">
+            <button onclick="login()">Login</button>
+            <button onclick="logout()">Logout</button>
+            <div id="authStatus"></div>
+        </div>
+        
+        <!-- WebSocket Connection Section -->
+        <div class="section">
+            <h3>🔌 WebSocket Connection</h3>
+            <select id="connectionType">
+                <option value="main">Main Chat</option>
+                <option value="conversation">Conversation</option>
+                <option value="anonymous">Anonymous Chat</option>
+            </select>
+            <input type="text" id="conversationId" placeholder="Conversation ID" value="1">
+            <input type="text" id="roomId" placeholder="Room ID" value="test_room_123">
+            <button onclick="connect()">Connect</button>
+            <button onclick="disconnect()">Disconnect</button>
+        </div>
+        
+        <!-- Message Testing Section -->
+        <div class="section">
+            <h3>📨 Message Testing</h3>
+            <button onclick="sendPing()">Send Ping</button>
+            <button onclick="sendMessage()">Send Message</button>
+            <button onclick="sendTyping()">Send Typing</button>
+            <button onclick="sendAnonymousMessage()">Send Anonymous Message</button>
+            <input type="text" id="messageText" placeholder="Message content" value="Hello from WebSocket test!">
+        </div>
+        
+        <!-- Log Section -->
+        <div class="section">
+            <h3>📋 Activity Log</h3>
+            <button onclick="clearLog()">Clear Log</button>
+            <div id="log" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let authToken = null;
+        let isConnected = false;
+        
+        function log(message, type = 'message') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = type;
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            logDiv.appendChild(logEntry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function updateStatus(status, className) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = status;
+            statusDiv.className = `status ${className}`;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                log('Attempting login...', 'message');
+                const response = await fetch('/api/v1/accounts/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.access;
+                    document.getElementById('authStatus').innerHTML = 
+                        '<div class="success">✅ Login successful</div>';
+                    log('Login successful', 'success');
+                } else {
+                    const error = await response.text();
+                    document.getElementById('authStatus').innerHTML = 
+                        '<div class="error">❌ Login failed</div>';
+                    log(`Login failed: ${error}`, 'error');
+                }
+            } catch (error) {
+                document.getElementById('authStatus').innerHTML = 
+                    '<div class="error">❌ Login error</div>';
+                log(`Login error: ${error}`, 'error');
+            }
+        }
+        
+        function logout() {
+            authToken = null;
+            document.getElementById('authStatus').innerHTML = '';
+            log('Logged out', 'message');
+        }
+        
+        function connect() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('Already connected', 'message');
+                return;
+            }
+            
+            const connectionType = document.getElementById('connectionType').value;
+            let wsUrl;
+            
+            if (connectionType === 'main') {
+                wsUrl = `ws://localhost:8000/ws/chat/?token=${authToken || 'test_token'}`;
+            } else if (connectionType === 'conversation') {
+                const convId = document.getElementById('conversationId').value;
+                wsUrl = `ws://localhost:8000/ws/conversations/${convId}/?token=${authToken || 'test_token'}`;
+            } else if (connectionType === 'anonymous') {
+                const roomId = document.getElementById('roomId').value;
+                wsUrl = `ws://localhost:8000/ws/anonymous_chat/${roomId}/`;
+            }
+            
+            log(`Connecting to: ${wsUrl}`, 'message');
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function(event) {
+                isConnected = true;
+                updateStatus('Connected', 'connected');
+                log('WebSocket connected', 'success');
+            };
+            
+            ws.onmessage = function(event) {
+                log(`Received: ${event.data}`, 'message');
+            };
+            
+            ws.onclose = function(event) {
+                isConnected = false;
+                updateStatus('Disconnected', 'disconnected');
+                log(`WebSocket closed: ${event.code} - ${event.reason}`, 'message');
+            };
+            
+            ws.onerror = function(error) {
+                log(`WebSocket error: ${error}`, 'error');
+            };
+        }
+        
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+        
+        function sendPing() {
+            if (!isConnected) {
+                log('Not connected', 'error');
+                return;
+            }
+            
+            const message = {
+                type: 'ping',
+                timestamp: new Date().toISOString()
+            };
+            
+            ws.send(JSON.stringify(message));
+            log('Sent ping', 'message');
+        }
+        
+        function sendMessage() {
+            if (!isConnected) {
+                log('Not connected', 'error');
+                return;
+            }
+            
+            const content = document.getElementById('messageText').value;
+            const message = {
+                type: 'chat_message',
+                message: content,
+                timestamp: new Date().toISOString()
+            };
+            
+            ws.send(JSON.stringify(message));
+            log(`Sent message: ${content}`, 'message');
+        }
+        
+        function sendTyping() {
+            if (!isConnected) {
+                log('Not connected', 'error');
+                return;
+            }
+            
+            const message = {
+                type: 'typing',
+                is_typing: true
+            };
+            
+            ws.send(JSON.stringify(message));
+            log('Sent typing indicator', 'message');
+        }
+        
+        function sendAnonymousMessage() {
+            if (!isConnected) {
+                log('Not connected', 'error');
+                return;
+            }
+            
+            const content = document.getElementById('messageText').value;
+            const message = {
+                type: 'chat_message',
+                message: content,
+                sender_name: 'Anonymous Tester',
+                sender_id: 'test_anonymous_123'
+            };
+            
+            ws.send(JSON.stringify(message));
+            log(`Sent anonymous message: ${content}`, 'message');
+        }
+        
+        // Initialize
+        log('WebSocket Test Client initialized', 'message');
+    </script>
+</body>
+</html>
+

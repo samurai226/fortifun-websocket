@@ -74,7 +74,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 from django.contrib.auth import get_user_model
-from .models import Conversation, Message
+from conversations.models import Conversation, Message
 
 User = get_user_model()
 
@@ -149,7 +149,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 from django.contrib.auth import get_user_model
-from .models import Match, UserPreference
+from matching.models import Match, UserPreference
 
 User = get_user_model()
 

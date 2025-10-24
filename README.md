@@ -1,129 +1,78 @@
-# API Chat & Matching - Django
+# 🚀 FortiFun WebSocket Server
 
-Une API backend pour une application de chat avec fonctionnalités de matching, construite avec Django et Django REST Framework.
+A Django-based WebSocket server for the FortiFun dating app, providing real-time chat, matching, and online tracking features.
 
-## Fonctionnalités
+## 🌟 Features
 
-- **Authentification** : JWT (JSON Web Token)
-- **Gestion des utilisateurs** : Inscription, connexion, gestion de profils
-- **Conversations** : Messagerie en temps réel (prête pour l'intégration avec WebSockets)
-- **Matching** : Système de likes, matches, et préférences utilisateur
-- **Blocage d'utilisateurs** : Possibilité de bloquer et débloquer des utilisateurs
+- **Real-time WebSocket Communication**
+- **JWT Authentication**
+- **Anonymous Chat Rooms**
+- **Online User Tracking**
+- **Message Broadcasting**
+- **Typing Indicators**
+- **Read Receipts**
 
-## Configuration du projet
+## 🔧 WebSocket Endpoints
 
-### Prérequis
+- **Main Chat**: `wss://your-app.onrender.com/ws/chat/?token={jwt_token}`
+- **Conversations**: `wss://your-app.onrender.com/ws/conversations/{id}/?token={jwt_token}`
+- **Anonymous Chat**: `wss://your-app.onrender.com/ws/anonymous_chat/{room_id}/`
 
-- Python 3.8+ 
-- pip (gestionnaire de packages Python)
+## 🚀 Deployment
 
-### Installation
+This server is optimized for deployment on Render with the following configuration:
 
-1. Cloner le dépôt
+### Build Command:
 ```bash
-git clone <repository-url>
-cd chat_api
+pip install -r requirements.txt && python manage.py migrate && python manage.py collectstatic --noinput
 ```
 
-2. Créer un environnement virtuel
+### Start Command:
 ```bash
-python -m venv venv
+python manage.py runserver 0.0.0.0:$PORT
 ```
 
-3. Activer l'environnement virtuel
-```bash
-# Linux/Mac
-source venv/bin/activate
+### Environment Variables:
+- `SECRET_KEY`: Django secret key
+- `DEBUG`: False
+- `ALLOWED_HOSTS`: *.onrender.com
+- `DATABASE_URL`: Auto-provided by Render
+- `REDIS_URL`: Auto-provided by Render
 
-# Windows
-venv\Scripts\activate
+## 📱 Flutter Integration
+
+Update your Flutter app's `DjangoService` with the deployed URL:
+
+```dart
+class DjangoService {
+  static const String baseUrl = 'https://your-app.onrender.com';
+  static const String wsUrl = 'wss://your-app.onrender.com/ws/chat/';
+}
 ```
 
-4. Installer les dépendances
-```bash
-pip install -r requirements.txt
+## 🧪 Testing
+
+Test WebSocket connection in browser console:
+
+```javascript
+const ws = new WebSocket('wss://your-app.onrender.com/ws/chat/?token=YOUR_JWT_TOKEN');
+ws.onopen = () => console.log('✅ Connected!');
+ws.onmessage = (event) => console.log('📥 Message:', event.data);
 ```
 
-5. Configurer les variables d'environnement (ou modifier settings.py)
-```bash
-# Exemple avec un fichier .env
-SECRET_KEY=your_secret_key
-DEBUG=True
-```
+## 📊 API Endpoints
 
-6. Appliquer les migrations
-```bash
-python manage.py makemigrations accounts conversations matching
-python manage.py migrate
-```
+- `POST /api/v1/accounts/auth/register` - User registration
+- `POST /api/v1/accounts/auth/login` - User login
+- `POST /api/v1/accounts/auth/refresh` - Token refresh
+- `GET /api/v1/accounts/users/me` - Get current user
+- `POST /api/v1/accounts/auth/logout` - Logout
 
-7. Créer un superutilisateur (facultatif)
-```bash
-python manage.py createsuperuser
-```
+## 🔒 Security
 
-8. Lancer le serveur de développement
-```bash
-python manage.py runserver
-```
+- JWT-based authentication
+- CORS configured for Flutter app
+- WebSocket authentication middleware
+- Secure token handling
 
-## Structure de l'API
-
-L'API est structurée en trois applications principales :
-
-1. **accounts** : Gestion des utilisateurs et de l'authentification
-2. **conversations** : Gestion des conversations et des messages
-3. **matching** : Système de matching et préférences utilisateur
-
-### Points d'entrée principaux
-
-#### Authentification
-- `POST /api/token/` : Obtenir un token JWT
-- `POST /api/token/refresh/` : Rafraîchir un token JWT
-- `POST /api/v1/auth/register/` : Inscription d'un nouvel utilisateur
-- `POST /api/v1/auth/logout/` : Déconnexion (invalidation du token)
-
-#### Utilisateurs
-- `GET/PUT /api/v1/auth/profile/` : Consulter/modifier son profil
-- `GET /api/v1/auth/users/<id>/` : Consulter le profil d'un utilisateur
-- `PUT /api/v1/auth/change-password/` : Changer son mot de passe
-- `POST /api/v1/auth/update-status/` : Mettre à jour son statut en ligne
-
-#### Conversations
-- `GET /api/v1/conversations/` : Liste des conversations
-- `POST /api/v1/conversations/` : Créer une nouvelle conversation
-- `GET /api/v1/conversations/<id>/` : Détails d'une conversation
-- `DELETE /api/v1/conversations/<id>/leave/` : Quitter une conversation
-
-#### Messages
-- `GET /api/v1/conversations/<id>/messages/` : Liste des messages d'une conversation
-- `POST /api/v1/conversations/<id>/messages/` : Envoyer un nouveau message
-- `POST /api/v1/conversations/<id>/messages/<id>/mark_read/` : Marquer un message comme lu
-
-#### Matching
-- `GET/PUT /api/v1/matching/preferences/` : Consulter/modifier ses préférences de matching
-- `GET /api/v1/matching/potential-matches/` : Liste des matches potentiels
-- `GET /api/v1/matches/` : Liste des matches
-- `POST /api/v1/matching/like/` : Liker un utilisateur
-- `POST /api/v1/matching/unlike/` : Retirer un like
-- `POST /api/v1/matching/block/` : Bloquer un utilisateur
-- `POST /api/v1/matching/unblock/` : Débloquer un utilisateur
-
-## Extensions possibles
-
-- Intégration de WebSockets pour les messages en temps réel
-- Système de notifications
-- Algorithme de matching avancé
-- Modération des messages
-- Gestion des médias (images, vidéos, etc.)
-
-## Sécurité
-
-- Tous les points d'entrée (sauf inscription et login) nécessitent un token JWT valide
-- Les mots de passe sont hachés avec l'algorithme par défaut de Django
-- Protection CSRF activée
-- En production, configurer CORS et HTTPS
-
-## Licence
-
-[Votre licence]
+Built with ❤️ for FortiFun

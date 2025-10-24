@@ -2,152 +2,39 @@
 
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from django.conf import settings
-import boto3
-from botocore.config import Config
-import os
-
-# Optional imports for matching models (when matching app is enabled)
-try:
-    from matching.models import UserPreference, UserInterest, UserInterestRelation
-    MATCHING_AVAILABLE = True
-except ImportError:
-    MATCHING_AVAILABLE = False
-    # Create dummy classes for when matching is not available
-    class UserPreference:
-        pass
-    class UserInterest:
-        pass
-    class UserInterestRelation:
-        pass
+from .models import DeviceToken
 
 User = get_user_model()
 
-if MATCHING_AVAILABLE:
-    class UserInterestSerializer(serializers.ModelSerializer):
-        class Meta:
-            model = UserInterest
-            fields = ['id', 'name']
-
-    class UserPreferenceSerializer(serializers.ModelSerializer):
-        class Meta:
-            model = UserPreference
-            fields = ['min_age', 'max_age', 'max_distance', 'gender_preference']
-else:
-    # Dummy serializers when matching is not available
-    class UserInterestSerializer(serializers.Serializer):
-        id = serializers.IntegerField()
-        name = serializers.CharField()
-
-    class UserPreferenceSerializer(serializers.Serializer):
-        min_age = serializers.IntegerField()
-        max_age = serializers.IntegerField()
-        max_distance = serializers.FloatField()
-        gender_preference = serializers.CharField()
-
-def _build_presigned_url(key: str) -> str | None:
-    if not key:
-        return None
-    # Already an absolute URL
-    if isinstance(key, str) and key.startswith('http'):
-        return key
-    # Normalize to profil/<filename>
-    file_name = str(key).split('/')[-1]
-    s3_key = f"profil/{file_name}"
-    try:
-        region = getattr(settings, 'AWS_S3_REGION_NAME', 'us-west-2') or 'us-west-2'
-        
-        # Create S3 client with timeout and error handling
-        s3 = boto3.client(
-            's3',
-            region_name=region,
-            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-            endpoint_url=f'https://s3.{region}.amazonaws.com',
-            config=Config(
-                signature_version='s3v4', 
-                s3={'addressing_style': 'path'},
-                read_timeout=10,
-                connect_timeout=10,
-                retries={'max_attempts': 2}
-            )
-        )
-        
-        # Generate presigned URL with shorter timeout
-        url = s3.generate_presigned_url(
-            'get_object',
-            Params={'Bucket': settings.AWS_STORAGE_BUCKET_NAME, 'Key': s3_key},
-            ExpiresIn=3600,
-        )
-        return url
-        
-    except Exception as e:
-        print(f"S3 presigned URL error: {e}")  # Debug logging
-        # Return a fallback URL or None
-        return None
-
-
 class UserSerializer(serializers.ModelSerializer):
-    """Serializer pour la représentation générale des utilisateurs"""
-    interests = serializers.SerializerMethodField()
-    preferences = UserPreferenceSerializer(read_only=True)
-    profile_picture = serializers.SerializerMethodField()
-    
+    """Serializer for user data"""
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'profile_picture', 
-                 'bio', 'date_of_birth', 'phone_number', 'location', 'is_online', 
-                 'last_activity', 'interests', 'preferences', 'appwrite_user_id']
-        read_only_fields = ['id', 'is_online', 'last_activity', 'appwrite_user_id']
-    
-    def get_interests(self, obj):
-        interest_relations = UserInterestRelation.objects.filter(user=obj)
-        interests = [relation.interest for relation in interest_relations]
-        return UserInterestSerializer(interests, many=True).data
-
-    def get_profile_picture(self, obj):
-        # Prefer the storage key/name to build presigned URL
-        key = None
-        try:
-            # If ImageFieldFile, .name is the key within the bucket
-            key = getattr(obj.profile_picture, 'name', None) or getattr(obj, 'profile_picture', None)
-        except Exception:
-            key = None
-        return _build_presigned_url(key)
-
-# Removed AppwriteUserSerializer - using standard UserSerializer
-
-
+        fields = [
+            'id', 'username', 'email', 'first_name', 'last_name',
+            'date_joined', 'last_login'
+        ]
+        read_only_fields = ['id', 'date_joined', 'last_login']
 
 class UserUpdateSerializer(serializers.ModelSerializer):
-    """Serializer pour la mise à jour du profil utilisateur"""
-    interests = serializers.ListField(child=serializers.CharField(), required=False, write_only=True)
-    
+    """Serializer for updating user data"""
     class Meta:
         model = User
-        fields = ['username', 'email', 'first_name', 'last_name', 'profile_picture', 
-                 'bio', 'date_of_birth', 'phone_number', 'location', 'latitude', 'longitude', 
-                 'interests']
-    
-    def update(self, instance, validated_data):
-        interests_data = validated_data.pop('interests', None)
-        
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        
-        # Mettre à jour les intérêts si fournis
-        if interests_data is not None:
-            # Supprimer les relations existantes
-            UserInterestRelation.objects.filter(user=instance).delete()
-            
-            # Ajouter les nouvelles relations
-            for interest_name in interests_data:
-                interest, created = UserInterest.objects.get_or_create(name=interest_name.lower())
-                UserInterestRelation.objects.create(user=instance, interest=interest)
-        
-        return instance
+        fields = [
+            'first_name', 'last_name', 'email'
+        ]
 
-
-
-# Removed AppwriteWebhookSerializer - using standard Django authentication
+class DeviceTokenSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DeviceToken
+        fields = [
+            'id',
+            'device_token',
+            'device_type',
+            'app_version',
+            'is_active',
+            'created_at',
+            'updated_at',
+            'last_used'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']

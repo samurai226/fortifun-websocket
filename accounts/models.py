@@ -1,77 +1,38 @@
-# accounts/models.py
+# Add this to the existing User model or create a new DeviceToken model
 
 from django.db import models
 from django.contrib.auth.models import AbstractUser
-from django.utils.translation import gettext_lazy as _
-from django.conf import settings
 
-class User(AbstractUser):
-    """Modèle utilisateur personnalisé avec des champs supplémentaires pour le matching"""
-    
-    # Champ pour lier avec Appwrite
-    appwrite_user_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
-    
-    # Champs de base pour le profil
-    profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
-    bio = models.TextField(blank=True)
-    date_of_birth = models.DateField(null=True, blank=True)
-    phone_number = models.CharField(max_length=15, blank=True)
-    
-    # Champs pour le matching
-    location = models.CharField(max_length=100, blank=True)
-    latitude = models.FloatField(null=True, blank=True)
-    longitude = models.FloatField(null=True, blank=True)
-    
-    # Champs de profil
-    GENDER_CHOICES = (
-        ('M', 'Homme'),
-        ('F', 'Femme'),
-        ('O', 'Autre'),
-        ('A', 'Préfère ne pas dire'),
-    )
-    gender = models.CharField(max_length=1, choices=GENDER_CHOICES, blank=True)
-    
-    # Préférences
-    is_online = models.BooleanField(default=False)
-    last_activity = models.DateTimeField(null=True, blank=True)
-    
-    # Relations
-    liked_users = models.ManyToManyField('self', symmetrical=False, related_name='liked_by', blank=True)
-    blocked_users = models.ManyToManyField('self', symmetrical=False, related_name='blocked_by', blank=True)
+class DeviceToken(models.Model):
+    """Model to store FCM device tokens for push notifications"""
+    user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='device_tokens')
+    device_token = models.CharField(max_length=255, unique=True)
+    device_type = models.CharField(max_length=50, choices=[
+        ('android', 'Android'),
+        ('ios', 'iOS'),
+        ('web', 'Web'),
+    ])
+    app_version = models.CharField(max_length=20, default='1.0.0')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_used = models.DateTimeField(null=True, blank=True)
     
     class Meta:
-        verbose_name = _('user')
-        verbose_name_plural = _('users')
+        db_table = 'device_tokens'
+        unique_together = ['user', 'device_token']
     
     def __str__(self):
-        return self.username
+        return f"{self.user.username} - {self.device_type} ({self.device_token[:20]}...)"
+
+# Add this method to the existing User model
+class User(AbstractUser):
+    # ... existing fields ...
     
-    @property
-    def matches(self):
-        """Retourne les utilisateurs avec lesquels il y a un match (like mutuel)"""
-        return self.liked_users.filter(liked_users=self)
+    def get_active_device_tokens(self):
+        """Get all active device tokens for this user"""
+        return self.device_tokens.filter(is_active=True)
     
-    def get_appwrite_id(self):
-        """Retourne l'ID Appwrite de l'utilisateur"""
-        return self.appwrite_user_id
-    
-    def is_appwrite_user(self):
-        """Vérifie si l'utilisateur est lié à Appwrite"""
-        return bool(self.appwrite_user_id)
-    
-    def get_profile_picture_url(self):
-        """Retourne l'URL CloudFront de la photo de profil"""
-        if not self.profile_picture:
-            return None
-        
-        # Si CloudFront est configuré, utiliser CloudFront
-        if hasattr(settings, 'CLOUDFRONT_DOMAIN') and settings.CLOUDFRONT_DOMAIN:
-            # Extraire le nom du fichier du chemin S3
-            s3_url = self.profile_picture.url
-            if 'amazonaws.com' in s3_url:
-                # Extraire le nom du fichier de l'URL S3
-                filename = s3_url.split('/')[-1].split('?')[0]  # Enlever les paramètres de requête
-                return f"https://{settings.CLOUDFRONT_DOMAIN}/profil/{filename}"
-        
-        # Fallback vers l'URL S3 directe
-        return self.profile_picture.url
+    def get_device_tokens_by_type(self, device_type):
+        """Get device tokens for a specific device type"""
+        return self.device_tokens.filter(device_type=device_type, is_active=True)
