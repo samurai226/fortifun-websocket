@@ -1,22 +1,22 @@
-# 🚀 FortiFun WebSocket Server
+# 🚀 FortiFun HTTP API Server
 
-A Django-based WebSocket server for the FortiFun dating app, providing real-time chat, matching, and online tracking features.
+A Django REST API server for the FortiFun dating app, providing authentication, user management, and data services.
 
 ## 🌟 Features
 
-- **Real-time WebSocket Communication**
+- **RESTful HTTP API**
 - **JWT Authentication**
-- **Anonymous Chat Rooms**
-- **Online User Tracking**
-- **Message Broadcasting**
-- **Typing Indicators**
-- **Read Receipts**
+- **User Management**
+- **Profile Management**
+- **File Upload (S3)**
+- **Database Operations**
+- **Health Monitoring**
 
-## 🔧 WebSocket Endpoints
+## 🔧 API Endpoints
 
-- **Main Chat**: `wss://your-app.onrender.com/ws/chat/?token={jwt_token}`
-- **Conversations**: `wss://your-app.onrender.com/ws/conversations/{id}/?token={jwt_token}`
-- **Anonymous Chat**: `wss://your-app.onrender.com/ws/anonymous_chat/{room_id}/`
+- **Authentication**: `https://your-app.onrender.com/api/v1/accounts/auth/`
+- **User Management**: `https://your-app.onrender.com/api/v1/accounts/users/`
+- **File Upload**: `https://your-app.onrender.com/api/v1/accounts/upload/`
 
 ## 🚀 Deployment
 
