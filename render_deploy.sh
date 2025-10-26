@@ -50,3 +50,5 @@ echo "6. Deploy!"
 echo ""
 echo "🌐 Your WebSocket URL will be:"
 echo "   wss://your-app.onrender.com/ws/chat/?token={jwt_token}"
+
+

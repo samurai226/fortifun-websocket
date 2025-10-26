@@ -31,3 +31,5 @@ whitenoise==6.6.0
 
 # Development (optional)
 python-decouple==3.8
+
+

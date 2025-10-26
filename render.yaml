@@ -14,17 +14,9 @@ services:
       - key: CORS_ALLOWED_ORIGINS
         value: "https://*.onrender.com"
       - key: DJANGO_SETTINGS_MODULE
-        value: "chat_api.settings_aurora"
-      - key: DB_NAME
-        value: "fortifun_aurora"
-      - key: DB_USER
-        value: "fortifun_admin"
-      - key: DB_PASSWORD
-        value: "[YOUR_AURORA_PASSWORD]"
-      - key: DB_HOST
-        value: "[YOUR_AURORA_ENDPOINT]"
-      - key: DB_PORT
-        value: "5432"
+        value: "chat_api.settings_rds"
+      - key: DATABASE_URL
+        value: "postgresql://postgres:Samurai112358132134@fortu-app-db.cziyiu4uetez.us-west-2.rds.amazonaws.com:5432/postgres?sslmode=require"
       - key: AWS_ACCESS_KEY_ID
         value: "[YOUR_AWS_ACCESS_KEY]"
       - key: AWS_SECRET_ACCESS_KEY
@@ -35,4 +27,4 @@ services:
         value: "us-west-2"
     healthCheckPath: /api/v1/accounts/auth/login
 
-# No local database - using AWS RDS Aurora
+# Using existing AWS RDS PostgreSQL database

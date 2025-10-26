@@ -1,5 +1,5 @@
-# chat_api/settings_aurora.py
-# HTTP API with AWS RDS Aurora Database
+# chat_api/settings_rds.py
+# HTTP API with AWS RDS PostgreSQL Database
 
 import os
 import dj_database_url
@@ -106,32 +106,14 @@ TEMPLATES = [
 # WSGI Application (HTTP only - no WebSocket)
 WSGI_APPLICATION = 'chat_api.wsgi.application'
 
-# AWS RDS Aurora Database Configuration
+# AWS RDS PostgreSQL Database Configuration
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'fortifun_aurora'),
-        'USER': os.getenv('DB_USER', 'fortifun_admin'),
-        'PASSWORD': os.getenv('DB_PASSWORD', ''),
-        'HOST': os.getenv('DB_HOST', ''),
-        'PORT': os.getenv('DB_PORT', '5432'),
-        'OPTIONS': {
-            'sslmode': 'require',  # Aurora requires SSL
-            'connect_timeout': 10,
-            'options': '-c default_transaction_isolation=read_committed'
-        },
-        'CONN_MAX_AGE': 600,  # Connection pooling
-        'CONN_HEALTH_CHECKS': True,
-    }
-}
-
-# Alternative: Use dj_database_url for Aurora connection string
-if os.getenv('DATABASE_URL'):
-    DATABASES['default'] = dj_database_url.parse(
-        os.getenv('DATABASE_URL'),
+    'default': dj_database_url.parse(
+        os.getenv('DATABASE_URL', 'postgresql://postgres:Samurai112358132134@fortu-app-db.cziyiu4uetez.us-west-2.rds.amazonaws.com:5432/postgres?sslmode=require'),
         conn_max_age=600,
         conn_health_checks=True,
     )
+}
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
